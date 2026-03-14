@@ -1,9 +1,32 @@
 spring:
   application:
     name: family-finance-metre
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: ${DB_DRIVER_CLASS_NAME}
+  jackson:
+    time-zone: ${app.timezone}
 
 management:
   endpoints:
     web:
       exposure:
         include: health
+
+app:
+  timezone: ${APP_TIMEZONE:Europe/Moscow}
+  security:
+    n8n-api-key: ${APP_SECURITY_N8N_API_KEY}
+  integrations:
+    n8n:
+      webhook-url: ${APP_INTEGRATIONS_N8N_WEBHOOK_URL}
+      bearer-token: ${APP_INTEGRATIONS_N8N_BEARER_TOKEN}
+      callback-submit-url: ${APP_INTEGRATIONS_N8N_CALLBACK_SUBMIT_URL}
+      connect-timeout: ${APP_INTEGRATIONS_N8N_CONNECT_TIMEOUT:5s}
+      read-timeout: ${APP_INTEGRATIONS_N8N_READ_TIMEOUT:30s}
+  scheduler:
+    payroll-collection:
+      enabled: ${APP_SCHEDULER_PAYROLL_COLLECTION_ENABLED:true}
+      cron: ${APP_SCHEDULER_PAYROLL_COLLECTION_CRON:0 0 9 * * *}
