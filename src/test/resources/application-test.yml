@@ -2,6 +2,10 @@ spring:
   config:
     activate:
       on-profile: test
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
   datasource:
     url: jdbc:postgresql://localhost:15432/family_finance_metre_test
     username: test_user
