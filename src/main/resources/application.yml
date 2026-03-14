@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: family-finance-metre
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
