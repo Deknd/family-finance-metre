@@ -1,0 +1,25 @@
+spring:
+  config:
+    activate:
+      on-profile: test
+  datasource:
+    url: jdbc:postgresql://localhost:15432/family_finance_metre_test
+    username: test_user
+    password: test_password
+    driver-class-name: org.postgresql.Driver
+
+app:
+  timezone: Europe/Moscow
+  security:
+    n8n-api-key: test-n8n-api-key
+  integrations:
+    n8n:
+      webhook-url: https://n8n.test.local/webhook/finance-intake-start
+      bearer-token: test-n8n-webhook-token
+      callback-submit-url: https://server.test.local/api/v1/intake/user-finance-data
+      connect-timeout: 2s
+      read-timeout: 10s
+  scheduler:
+    payroll-collection:
+      enabled: false
+      cron: 0 0 9 * * *
