@@ -44,8 +44,9 @@ class FlywayReferenceMigrationSmokeTest {
 		assertThat(tableExists("families")).isTrue();
 		assertThat(tableExists("family_members")).isTrue();
 		assertThat(tableExists("devices")).isTrue();
+		assertThat(tableExists("member_payroll_schedules")).isTrue();
 
-		Boolean migrationApplied = jdbcTemplate.queryForObject(
+		Boolean referenceMigrationApplied = jdbcTemplate.queryForObject(
 			"""
 				select success
 				from flyway_schema_history
@@ -53,8 +54,17 @@ class FlywayReferenceMigrationSmokeTest {
 			""",
 			Boolean.class
 		);
+		Boolean payrollMigrationApplied = jdbcTemplate.queryForObject(
+			"""
+				select success
+				from flyway_schema_history
+				where version = '2'
+			""",
+			Boolean.class
+		);
 
-		assertThat(migrationApplied).isTrue();
+		assertThat(referenceMigrationApplied).isTrue();
+		assertThat(payrollMigrationApplied).isTrue();
 	}
 
 	@Test
@@ -242,6 +252,198 @@ class FlywayReferenceMigrationSmokeTest {
 			.contains("(device_token_hash)");
 	}
 
+	@Test
+	void memberPayrollSchedulesSupportMultipleEventsDefaultsChecksForeignKeyAndUniqueExpressionIndex() {
+		UUID familyId = insertFamily("Smirnov family");
+		UUID memberId = insertFamilyMember(familyId, "Alex");
+		UUID fixedDayScheduleId = UUID.randomUUID();
+		UUID lastDayScheduleId = UUID.randomUUID();
+		UUID secondFixedDayScheduleId = UUID.randomUUID();
+
+		jdbcTemplate.update(
+			"""
+				insert into member_payroll_schedules (id, member_id, label, schedule_type, day_of_month)
+				values (?, ?, ?, ?, ?)
+			""",
+			fixedDayScheduleId,
+			memberId,
+			"Main salary",
+			"fixed_day_of_month",
+			16
+		);
+
+		Map<String, Object> fixedDayScheduleRow = jdbcTemplate.queryForMap(
+			"""
+				select label, day_of_month, trigger_delay_days, is_active, created_at, updated_at
+				from member_payroll_schedules
+				where id = ?
+			""",
+			fixedDayScheduleId
+		);
+
+		assertThat(fixedDayScheduleRow.get("label")).isEqualTo("Main salary");
+		assertThat(((Number) fixedDayScheduleRow.get("day_of_month")).intValue()).isEqualTo(16);
+		assertThat(((Number) fixedDayScheduleRow.get("trigger_delay_days")).intValue()).isEqualTo(1);
+		assertThat(fixedDayScheduleRow.get("is_active")).isEqualTo(true);
+		assertThat(fixedDayScheduleRow.get("created_at")).isNotNull();
+		assertThat(fixedDayScheduleRow.get("updated_at")).isNotNull();
+
+		jdbcTemplate.update(
+			"""
+				insert into member_payroll_schedules (id, member_id, schedule_type)
+				values (?, ?, ?)
+			""",
+			lastDayScheduleId,
+			memberId,
+			"last_day_of_month"
+		);
+
+		Map<String, Object> lastDayScheduleRow = jdbcTemplate.queryForMap(
+			"""
+				select day_of_month, trigger_delay_days, is_active, created_at, updated_at
+				from member_payroll_schedules
+				where id = ?
+			""",
+			lastDayScheduleId
+		);
+
+		assertThat(lastDayScheduleRow.get("day_of_month")).isNull();
+		assertThat(((Number) lastDayScheduleRow.get("trigger_delay_days")).intValue()).isEqualTo(1);
+		assertThat(lastDayScheduleRow.get("is_active")).isEqualTo(true);
+		assertThat(lastDayScheduleRow.get("created_at")).isNotNull();
+		assertThat(lastDayScheduleRow.get("updated_at")).isNotNull();
+
+		jdbcTemplate.update(
+			"""
+				insert into member_payroll_schedules (id, member_id, schedule_type, day_of_month, trigger_delay_days)
+				values (?, ?, ?, ?, ?)
+			""",
+			secondFixedDayScheduleId,
+			memberId,
+			"fixed_day_of_month",
+			25,
+			3
+		);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into member_payroll_schedules (id, member_id, schedule_type, day_of_month)
+				values (?, ?, ?, ?)
+			""",
+			UUID.randomUUID(),
+			memberId,
+			"fixed_day_of_month",
+			16
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into member_payroll_schedules (id, member_id, schedule_type, day_of_month)
+				values (?, ?, ?, ?)
+			""",
+			UUID.randomUUID(),
+			memberId,
+			"weekly",
+			10
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into member_payroll_schedules (id, member_id, schedule_type)
+				values (?, ?, ?)
+			""",
+			UUID.randomUUID(),
+			memberId,
+			"fixed_day_of_month"
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into member_payroll_schedules (id, member_id, schedule_type, day_of_month)
+				values (?, ?, ?, ?)
+			""",
+			UUID.randomUUID(),
+			memberId,
+			"fixed_day_of_month",
+			0
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into member_payroll_schedules (id, member_id, schedule_type, day_of_month)
+				values (?, ?, ?, ?)
+			""",
+			UUID.randomUUID(),
+			memberId,
+			"fixed_day_of_month",
+			32
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into member_payroll_schedules (id, member_id, schedule_type, day_of_month)
+				values (?, ?, ?, ?)
+			""",
+			UUID.randomUUID(),
+			memberId,
+			"last_day_of_month",
+			30
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into member_payroll_schedules (id, member_id, schedule_type, day_of_month, trigger_delay_days)
+				values (?, ?, ?, ?, ?)
+			""",
+			UUID.randomUUID(),
+			memberId,
+			"fixed_day_of_month",
+			5,
+			-1
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into member_payroll_schedules (id, member_id, schedule_type, day_of_month, trigger_delay_days)
+				values (?, ?, ?, ?, ?)
+			""",
+			UUID.randomUUID(),
+			memberId,
+			"fixed_day_of_month",
+			5,
+			8
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into member_payroll_schedules (id, member_id, schedule_type, day_of_month)
+				values (?, ?, ?, ?)
+			""",
+			UUID.randomUUID(),
+			UUID.randomUUID(),
+			"fixed_day_of_month",
+			10
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		String payrollScheduleIndexDefinition = jdbcTemplate.queryForObject(
+			"""
+				select indexdef
+				from pg_indexes
+				where schemaname = 'public'
+				  and indexname = 'uq_member_payroll_schedules_member_schedule_type_day_of_month'
+			""",
+			String.class
+		);
+
+		assertThat(payrollScheduleIndexDefinition).isNotNull();
+		assertThat(payrollScheduleIndexDefinition.toLowerCase())
+			.contains("create unique index uq_member_payroll_schedules_member_schedule_type_day_of_month")
+			.contains("on public.member_payroll_schedules")
+			.contains("member_id, schedule_type")
+			.contains("coalesce(")
+			.contains("day_of_month");
+	}
+
 	private boolean tableExists(String tableName) {
 		Integer tableCount = jdbcTemplate.queryForObject(
 			"""
@@ -261,6 +463,20 @@ class FlywayReferenceMigrationSmokeTest {
 		UUID familyId = UUID.randomUUID();
 		jdbcTemplate.update("insert into families (id, name) values (?, ?)", familyId, familyName);
 		return familyId;
+	}
+
+	private UUID insertFamilyMember(UUID familyId, String firstName) {
+		UUID memberId = UUID.randomUUID();
+		jdbcTemplate.update(
+			"""
+				insert into family_members (id, family_id, first_name)
+				values (?, ?, ?)
+			""",
+			memberId,
+			familyId,
+			firstName
+		);
+		return memberId;
 	}
 
 }
