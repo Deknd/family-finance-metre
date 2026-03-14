@@ -1,0 +1,22 @@
+spring:
+  config:
+    activate:
+      on-profile: migration
+  datasource:
+    driver-class-name: org.postgresql.Driver
+
+app:
+  timezone: Europe/Moscow
+  security:
+    n8n-api-key: migration-n8n-api-key
+  integrations:
+    n8n:
+      webhook-url: https://n8n.migration.local/webhook/finance-intake-start
+      bearer-token: migration-n8n-webhook-token
+      callback-submit-url: https://server.migration.local/api/v1/intake/user-finance-data
+      connect-timeout: 2s
+      read-timeout: 10s
+  scheduler:
+    payroll-collection:
+      enabled: false
+      cron: 0 0 9 * * *
