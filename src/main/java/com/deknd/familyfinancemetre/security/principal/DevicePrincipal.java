@@ -1,4 +1,4 @@
-package com.deknd.familyfinancemetre.security;
+package com.deknd.familyfinancemetre.security.principal;
 
 import java.util.UUID;
 

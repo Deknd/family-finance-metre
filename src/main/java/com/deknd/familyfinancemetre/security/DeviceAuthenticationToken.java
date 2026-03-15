@@ -1,5 +1,6 @@
 package com.deknd.familyfinancemetre.security;
 
+import com.deknd.familyfinancemetre.security.principal.DevicePrincipal;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.authority.AuthorityUtils;
 

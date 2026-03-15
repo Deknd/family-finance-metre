@@ -1,5 +1,7 @@
 package com.deknd.familyfinancemetre.security;
 
+import com.deknd.familyfinancemetre.security.principal.DevicePrincipal;
+import com.deknd.familyfinancemetre.security.principal.IntegrationPrincipal;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;

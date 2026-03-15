@@ -1,6 +1,7 @@
 package com.deknd.familyfinancemetre.security;
 
 import com.deknd.familyfinancemetre.config.ApplicationProperties;
+import com.deknd.familyfinancemetre.security.principal.IntegrationPrincipal;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;

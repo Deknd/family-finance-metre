@@ -3,6 +3,7 @@ package com.deknd.familyfinancemetre.security;
 import com.deknd.familyfinancemetre.entity.DeviceEntity;
 import com.deknd.familyfinancemetre.entity.enums.DeviceStatus;
 import com.deknd.familyfinancemetre.repository.DeviceRepository;
+import com.deknd.familyfinancemetre.security.principal.DevicePrincipal;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.core.Authentication;
