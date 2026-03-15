@@ -6,6 +6,10 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: ${DB_DRIVER_CLASS_NAME}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
   jackson:
     time-zone: ${app.timezone}
 
