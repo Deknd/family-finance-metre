@@ -12,6 +12,10 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
 
@@ -22,6 +26,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @SpringBootTest
 @ActiveProfiles("migration")
 class FlywayReferenceMigrationSmokeTest {
+
+	private static final ZoneOffset MOSCOW_OFFSET = ZoneOffset.ofHours(3);
 
 	@Container
 	static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
@@ -45,26 +51,14 @@ class FlywayReferenceMigrationSmokeTest {
 		assertThat(tableExists("family_members")).isTrue();
 		assertThat(tableExists("devices")).isTrue();
 		assertThat(tableExists("member_payroll_schedules")).isTrue();
+		assertThat(tableExists("llm_collection_requests")).isTrue();
+		assertThat(tableExists("finance_submissions")).isTrue();
+		assertThat(tableExists("member_finance_snapshots")).isTrue();
+		assertThat(tableExists("family_dashboard_snapshots")).isTrue();
 
-		Boolean referenceMigrationApplied = jdbcTemplate.queryForObject(
-			"""
-				select success
-				from flyway_schema_history
-				where version = '1'
-			""",
-			Boolean.class
-		);
-		Boolean payrollMigrationApplied = jdbcTemplate.queryForObject(
-			"""
-				select success
-				from flyway_schema_history
-				where version = '2'
-			""",
-			Boolean.class
-		);
-
-		assertThat(referenceMigrationApplied).isTrue();
-		assertThat(payrollMigrationApplied).isTrue();
+		assertThat(migrationApplied("1")).isTrue();
+		assertThat(migrationApplied("2")).isTrue();
+		assertThat(migrationApplied("3")).isTrue();
 	}
 
 	@Test
@@ -444,6 +438,1079 @@ class FlywayReferenceMigrationSmokeTest {
 			.contains("day_of_month");
 	}
 
+	@Test
+	void llmCollectionRequestsSupportConstraintsForeignKeysAndIndexes() {
+		UUID familyId = insertFamily("Volkov family");
+		UUID memberId = insertFamilyMember(familyId, "Nina");
+		UUID payrollScheduleId = insertPayrollSchedule(memberId, 10);
+		UUID llmCollectionRequestId = UUID.randomUUID();
+		String requestId = "req-" + UUID.randomUUID();
+
+		jdbcTemplate.update(
+			"""
+				insert into llm_collection_requests (
+				    id,
+				    request_id,
+				    family_id,
+				    member_id,
+				    payroll_schedule_id,
+				    period_year,
+				    period_month,
+				    reason,
+				    status,
+				    requested_fields,
+				    nominal_payroll_date,
+				    effective_payroll_date,
+				    scheduled_trigger_date,
+				    triggered_at,
+				    request_payload
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?, cast(? as jsonb))
+			""",
+			llmCollectionRequestId,
+			requestId,
+			familyId,
+			memberId,
+			payrollScheduleId,
+			2026,
+			3,
+			"day_after_salary",
+			"pending",
+			"[\"monthly_income\",\"monthly_expenses\"]",
+			LocalDate.parse("2026-03-10"),
+			LocalDate.parse("2026-03-10"),
+			LocalDate.parse("2026-03-11"),
+			atMoscow("2026-03-11T09:00:00"),
+			"{\"request_id\":\"req\"}"
+		);
+
+		Map<String, Object> requestRow = jdbcTemplate.queryForMap(
+			"""
+				select accepted_at, completed_at, workflow_run_id, response_payload, error_message, created_at, updated_at
+				from llm_collection_requests
+				where id = ?
+			""",
+			llmCollectionRequestId
+		);
+
+		assertThat(requestRow.get("accepted_at")).isNull();
+		assertThat(requestRow.get("completed_at")).isNull();
+		assertThat(requestRow.get("workflow_run_id")).isNull();
+		assertThat(requestRow.get("response_payload")).isNull();
+		assertThat(requestRow.get("error_message")).isNull();
+		assertThat(requestRow.get("created_at")).isNotNull();
+		assertThat(requestRow.get("updated_at")).isNotNull();
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into llm_collection_requests (
+				    id,
+				    request_id,
+				    family_id,
+				    member_id,
+				    payroll_schedule_id,
+				    period_year,
+				    period_month,
+				    reason,
+				    status,
+				    requested_fields,
+				    nominal_payroll_date,
+				    effective_payroll_date,
+				    scheduled_trigger_date,
+				    triggered_at,
+				    request_payload
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?, cast(? as jsonb))
+			""",
+			UUID.randomUUID(),
+			requestId,
+			familyId,
+			memberId,
+			insertPayrollSchedule(memberId, 25),
+			2026,
+			4,
+			"day_after_salary",
+			"pending",
+			"[\"monthly_income\"]",
+			LocalDate.parse("2026-04-25"),
+			LocalDate.parse("2026-04-25"),
+			LocalDate.parse("2026-04-26"),
+			atMoscow("2026-04-26T09:00:00"),
+			"{\"request_id\":\"duplicate\"}"
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into llm_collection_requests (
+				    id,
+				    request_id,
+				    family_id,
+				    member_id,
+				    payroll_schedule_id,
+				    period_year,
+				    period_month,
+				    reason,
+				    status,
+				    requested_fields,
+				    nominal_payroll_date,
+				    effective_payroll_date,
+				    scheduled_trigger_date,
+				    triggered_at,
+				    request_payload
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?, cast(? as jsonb))
+			""",
+			UUID.randomUUID(),
+			"req-" + UUID.randomUUID(),
+			familyId,
+			memberId,
+			payrollScheduleId,
+			2026,
+			3,
+			"day_after_salary",
+			"accepted",
+			"[\"monthly_income\"]",
+			LocalDate.parse("2026-03-10"),
+			LocalDate.parse("2026-03-10"),
+			LocalDate.parse("2026-03-11"),
+			atMoscow("2026-03-11T10:00:00"),
+			"{\"request_id\":\"duplicate-schedule\"}"
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into llm_collection_requests (
+				    id,
+				    request_id,
+				    family_id,
+				    member_id,
+				    payroll_schedule_id,
+				    period_year,
+				    period_month,
+				    reason,
+				    status,
+				    requested_fields,
+				    nominal_payroll_date,
+				    effective_payroll_date,
+				    scheduled_trigger_date,
+				    triggered_at,
+				    request_payload
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?, cast(? as jsonb))
+			""",
+			UUID.randomUUID(),
+			"req-" + UUID.randomUUID(),
+			familyId,
+			memberId,
+			insertPayrollSchedule(memberId, 22),
+			2026,
+			13,
+			"day_after_salary",
+			"pending",
+			"[\"monthly_income\"]",
+			LocalDate.parse("2026-05-22"),
+			LocalDate.parse("2026-05-22"),
+			LocalDate.parse("2026-05-23"),
+			atMoscow("2026-05-23T09:00:00"),
+			"{\"request_id\":\"bad-month\"}"
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into llm_collection_requests (
+				    id,
+				    request_id,
+				    family_id,
+				    member_id,
+				    payroll_schedule_id,
+				    period_year,
+				    period_month,
+				    reason,
+				    status,
+				    requested_fields,
+				    nominal_payroll_date,
+				    effective_payroll_date,
+				    scheduled_trigger_date,
+				    triggered_at,
+				    request_payload
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?, cast(? as jsonb))
+			""",
+			UUID.randomUUID(),
+			"req-" + UUID.randomUUID(),
+			familyId,
+			memberId,
+			insertPayrollSchedule(memberId, 28),
+			2026,
+			5,
+			"day_after_salary",
+			"queued",
+			"[\"monthly_income\"]",
+			LocalDate.parse("2026-05-28"),
+			LocalDate.parse("2026-05-28"),
+			LocalDate.parse("2026-05-29"),
+			atMoscow("2026-05-29T09:00:00"),
+			"{\"request_id\":\"bad-status\"}"
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into llm_collection_requests (
+				    id,
+				    request_id,
+				    family_id,
+				    member_id,
+				    payroll_schedule_id,
+				    period_year,
+				    period_month,
+				    reason,
+				    status,
+				    requested_fields,
+				    nominal_payroll_date,
+				    effective_payroll_date,
+				    scheduled_trigger_date,
+				    triggered_at,
+				    request_payload
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?, cast(? as jsonb))
+			""",
+			UUID.randomUUID(),
+			"req-" + UUID.randomUUID(),
+			UUID.randomUUID(),
+			memberId,
+			insertPayrollSchedule(memberId, 30),
+			2026,
+			6,
+			"day_after_salary",
+			"pending",
+			"[\"monthly_income\"]",
+			LocalDate.parse("2026-06-30"),
+			LocalDate.parse("2026-06-30"),
+			LocalDate.parse("2026-07-01"),
+			atMoscow("2026-07-01T09:00:00"),
+			"{\"request_id\":\"bad-fk\"}"
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		String requestIdConstraint = jdbcTemplate.queryForObject(
+			"""
+				select constraint_name
+				from information_schema.table_constraints
+				where table_schema = 'public'
+				  and table_name = 'llm_collection_requests'
+				  and constraint_type = 'UNIQUE'
+				  and constraint_name = 'uq_llm_collection_requests_request_id'
+			""",
+			String.class
+		);
+		String requestStatusIndexDefinition = jdbcTemplate.queryForObject(
+			"""
+				select indexdef
+				from pg_indexes
+				where schemaname = 'public'
+				  and indexname = 'idx_llm_collection_requests_status'
+			""",
+			String.class
+		);
+		String payrollEventUniqueIndexDefinition = jdbcTemplate.queryForObject(
+			"""
+				select indexdef
+				from pg_indexes
+				where schemaname = 'public'
+				  and indexname = 'uq_llm_requests_schedule_effective_date'
+			""",
+			String.class
+		);
+
+		assertThat(requestIdConstraint).isEqualTo("uq_llm_collection_requests_request_id");
+		assertThat(requestStatusIndexDefinition).isNotNull();
+		assertThat(requestStatusIndexDefinition.toLowerCase())
+			.contains("create index idx_llm_collection_requests_status")
+			.contains("on public.llm_collection_requests")
+			.contains("(status)");
+		assertThat(payrollEventUniqueIndexDefinition).isNotNull();
+		assertThat(payrollEventUniqueIndexDefinition.toLowerCase())
+			.contains("create unique index uq_llm_requests_schedule_effective_date")
+			.contains("on public.llm_collection_requests")
+			.contains("payroll_schedule_id, effective_payroll_date");
+	}
+
+	@Test
+	void financeSubmissionsSupportConstraintsForeignKeysAndIndexes() {
+		UUID familyId = insertFamily("Belov family");
+		UUID memberId = insertFamilyMember(familyId, "Ilya");
+		UUID payrollScheduleId = insertPayrollSchedule(memberId, 12);
+		UUID llmRequestId = insertLlmCollectionRequest(familyId, memberId, payrollScheduleId, 2026, 3, 12);
+		UUID submissionId = UUID.randomUUID();
+		String externalSubmissionId = "sub-" + UUID.randomUUID();
+
+		jdbcTemplate.update(
+			"""
+				insert into finance_submissions (
+				    id,
+				    external_submission_id,
+				    request_id,
+				    llm_collection_request_id,
+				    family_id,
+				    member_id,
+				    source,
+				    period_year,
+				    period_month,
+				    collected_at,
+				    monthly_income,
+				    monthly_expenses,
+				    monthly_credit_payments,
+				    liquid_savings,
+				    confidence,
+				    notes,
+				    raw_payload
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb))
+			""",
+			submissionId,
+			externalSubmissionId,
+			"req-" + UUID.randomUUID(),
+			llmRequestId,
+			familyId,
+			memberId,
+			"telegram",
+			2026,
+			3,
+			atMoscow("2026-03-15T08:40:00"),
+			120000,
+			50000,
+			18000,
+			150000,
+			"medium",
+			"Approximate values",
+			"{\"source\":\"telegram\"}"
+		);
+
+		Map<String, Object> submissionRow = jdbcTemplate.queryForMap(
+			"""
+				select created_at, notes, confidence, request_id, llm_collection_request_id
+				from finance_submissions
+				where id = ?
+			""",
+			submissionId
+		);
+
+		assertThat(submissionRow.get("created_at")).isNotNull();
+		assertThat(submissionRow.get("notes")).isEqualTo("Approximate values");
+		assertThat(submissionRow.get("confidence")).isEqualTo("medium");
+		assertThat(submissionRow.get("request_id")).isNotNull();
+		assertThat(submissionRow.get("llm_collection_request_id")).isEqualTo(llmRequestId);
+
+		jdbcTemplate.update(
+			"""
+				insert into finance_submissions (
+				    id,
+				    external_submission_id,
+				    family_id,
+				    member_id,
+				    source,
+				    period_year,
+				    period_month,
+				    collected_at,
+				    monthly_income,
+				    monthly_expenses,
+				    monthly_credit_payments,
+				    liquid_savings,
+				    raw_payload
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb))
+			""",
+			UUID.randomUUID(),
+			"sub-" + UUID.randomUUID(),
+			familyId,
+			memberId,
+			"telegram",
+			2026,
+			4,
+			atMoscow("2026-04-15T08:40:00"),
+			100000,
+			40000,
+			10000,
+			90000,
+			"{\"source\":\"telegram\",\"variant\":\"minimal\"}"
+		);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into finance_submissions (
+				    id,
+				    external_submission_id,
+				    family_id,
+				    member_id,
+				    source,
+				    period_year,
+				    period_month,
+				    collected_at,
+				    monthly_income,
+				    monthly_expenses,
+				    monthly_credit_payments,
+				    liquid_savings,
+				    raw_payload
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb))
+			""",
+			UUID.randomUUID(),
+			externalSubmissionId,
+			familyId,
+			memberId,
+			"telegram",
+			2026,
+			5,
+			atMoscow("2026-05-15T08:40:00"),
+			100000,
+			40000,
+			10000,
+			90000,
+			"{\"source\":\"telegram\",\"variant\":\"duplicate\"}"
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into finance_submissions (
+				    id,
+				    external_submission_id,
+				    family_id,
+				    member_id,
+				    source,
+				    period_year,
+				    period_month,
+				    collected_at,
+				    monthly_income,
+				    monthly_expenses,
+				    monthly_credit_payments,
+				    liquid_savings,
+				    raw_payload
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb))
+			""",
+			UUID.randomUUID(),
+			"sub-" + UUID.randomUUID(),
+			familyId,
+			memberId,
+			"email",
+			2026,
+			5,
+			atMoscow("2026-05-15T08:40:00"),
+			100000,
+			40000,
+			10000,
+			90000,
+			"{\"source\":\"email\"}"
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into finance_submissions (
+				    id,
+				    external_submission_id,
+				    family_id,
+				    member_id,
+				    source,
+				    period_year,
+				    period_month,
+				    collected_at,
+				    monthly_income,
+				    monthly_expenses,
+				    monthly_credit_payments,
+				    liquid_savings,
+				    confidence,
+				    raw_payload
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb))
+			""",
+			UUID.randomUUID(),
+			"sub-" + UUID.randomUUID(),
+			familyId,
+			memberId,
+			"telegram",
+			2026,
+			5,
+			atMoscow("2026-05-15T08:40:00"),
+			100000,
+			40000,
+			10000,
+			90000,
+			"certain",
+			"{\"confidence\":\"certain\"}"
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into finance_submissions (
+				    id,
+				    external_submission_id,
+				    family_id,
+				    member_id,
+				    source,
+				    period_year,
+				    period_month,
+				    collected_at,
+				    monthly_income,
+				    monthly_expenses,
+				    monthly_credit_payments,
+				    liquid_savings,
+				    raw_payload
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb))
+			""",
+			UUID.randomUUID(),
+			"sub-" + UUID.randomUUID(),
+			familyId,
+			memberId,
+			"telegram",
+			2026,
+			0,
+			atMoscow("2026-05-15T08:40:00"),
+			100000,
+			40000,
+			10000,
+			90000,
+			"{\"period_month\":0}"
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into finance_submissions (
+				    id,
+				    external_submission_id,
+				    family_id,
+				    member_id,
+				    source,
+				    period_year,
+				    period_month,
+				    collected_at,
+				    monthly_income,
+				    monthly_expenses,
+				    monthly_credit_payments,
+				    liquid_savings,
+				    raw_payload
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb))
+			""",
+			UUID.randomUUID(),
+			"sub-" + UUID.randomUUID(),
+			familyId,
+			memberId,
+			"telegram",
+			2026,
+			5,
+			atMoscow("2026-05-15T08:40:00"),
+			-1,
+			40000,
+			10000,
+			90000,
+			"{\"monthly_income\":-1}"
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into finance_submissions (
+				    id,
+				    external_submission_id,
+				    llm_collection_request_id,
+				    family_id,
+				    member_id,
+				    source,
+				    period_year,
+				    period_month,
+				    collected_at,
+				    monthly_income,
+				    monthly_expenses,
+				    monthly_credit_payments,
+				    liquid_savings,
+				    raw_payload
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb))
+			""",
+			UUID.randomUUID(),
+			"sub-" + UUID.randomUUID(),
+			UUID.randomUUID(),
+			familyId,
+			memberId,
+			"telegram",
+			2026,
+			5,
+			atMoscow("2026-05-15T08:40:00"),
+			100000,
+			40000,
+			10000,
+			90000,
+			"{\"llm_collection_request_id\":\"missing\"}"
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		String memberPeriodIndexDefinition = jdbcTemplate.queryForObject(
+			"""
+				select indexdef
+				from pg_indexes
+				where schemaname = 'public'
+				  and indexname = 'idx_finance_submissions_member_period_collected_at'
+			""",
+			String.class
+		);
+		String requestIdIndexDefinition = jdbcTemplate.queryForObject(
+			"""
+				select indexdef
+				from pg_indexes
+				where schemaname = 'public'
+				  and indexname = 'idx_finance_submissions_request_id'
+			""",
+			String.class
+		);
+
+		assertThat(memberPeriodIndexDefinition).isNotNull();
+		assertThat(memberPeriodIndexDefinition.toLowerCase())
+			.contains("create index idx_finance_submissions_member_period_collected_at")
+			.contains("on public.finance_submissions")
+			.contains("member_id, period_year, period_month, collected_at desc");
+		assertThat(requestIdIndexDefinition).isNotNull();
+		assertThat(requestIdIndexDefinition.toLowerCase())
+			.contains("create index idx_finance_submissions_request_id")
+			.contains("on public.finance_submissions")
+			.contains("(request_id)");
+	}
+
+	@Test
+	void memberFinanceSnapshotsSupportConstraintsForeignKeysAndUniquePeriod() {
+		UUID familyId = insertFamily("Morozov family");
+		UUID memberId = insertFamilyMember(familyId, "Olga");
+		UUID payrollScheduleId = insertPayrollSchedule(memberId, 18);
+		UUID llmRequestId = insertLlmCollectionRequest(familyId, memberId, payrollScheduleId, 2026, 3, 18);
+		UUID submissionId = insertFinanceSubmission(familyId, memberId, llmRequestId, "sub-" + UUID.randomUUID(), 2026, 3, 100000);
+		UUID snapshotId = UUID.randomUUID();
+
+		jdbcTemplate.update(
+			"""
+				insert into member_finance_snapshots (
+				    id,
+				    family_id,
+				    member_id,
+				    period_year,
+				    period_month,
+				    source_submission_id,
+				    monthly_income,
+				    monthly_expenses,
+				    monthly_credit_payments,
+				    liquid_savings,
+				    collected_at
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			""",
+			snapshotId,
+			familyId,
+			memberId,
+			2026,
+			3,
+			submissionId,
+			100000,
+			40000,
+			15000,
+			80000,
+			atMoscow("2026-03-19T10:00:00")
+		);
+
+		Map<String, Object> snapshotRow = jdbcTemplate.queryForMap(
+			"""
+				select created_at, updated_at
+				from member_finance_snapshots
+				where id = ?
+			""",
+			snapshotId
+		);
+
+		assertThat(snapshotRow.get("created_at")).isNotNull();
+		assertThat(snapshotRow.get("updated_at")).isNotNull();
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into member_finance_snapshots (
+				    id,
+				    family_id,
+				    member_id,
+				    period_year,
+				    period_month,
+				    source_submission_id,
+				    monthly_income,
+				    monthly_expenses,
+				    monthly_credit_payments,
+				    liquid_savings,
+				    collected_at
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			""",
+			UUID.randomUUID(),
+			familyId,
+			memberId,
+			2026,
+			3,
+			submissionId,
+			100000,
+			40000,
+			15000,
+			80000,
+			atMoscow("2026-03-19T10:00:00")
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into member_finance_snapshots (
+				    id,
+				    family_id,
+				    member_id,
+				    period_year,
+				    period_month,
+				    source_submission_id,
+				    monthly_income,
+				    monthly_expenses,
+				    monthly_credit_payments,
+				    liquid_savings,
+				    collected_at
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			""",
+			UUID.randomUUID(),
+			familyId,
+			memberId,
+			2026,
+			0,
+			submissionId,
+			100000,
+			40000,
+			15000,
+			80000,
+			atMoscow("2026-03-19T10:00:00")
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into member_finance_snapshots (
+				    id,
+				    family_id,
+				    member_id,
+				    period_year,
+				    period_month,
+				    source_submission_id,
+				    monthly_income,
+				    monthly_expenses,
+				    monthly_credit_payments,
+				    liquid_savings,
+				    collected_at
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			""",
+			UUID.randomUUID(),
+			familyId,
+			memberId,
+			2026,
+			4,
+			submissionId,
+			100000,
+			-10,
+			15000,
+			80000,
+			atMoscow("2026-04-19T10:00:00")
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into member_finance_snapshots (
+				    id,
+				    family_id,
+				    member_id,
+				    period_year,
+				    period_month,
+				    source_submission_id,
+				    monthly_income,
+				    monthly_expenses,
+				    monthly_credit_payments,
+				    liquid_savings,
+				    collected_at
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			""",
+			UUID.randomUUID(),
+			familyId,
+			memberId,
+			2026,
+			4,
+			UUID.randomUUID(),
+			100000,
+			40000,
+			15000,
+			80000,
+			atMoscow("2026-04-19T10:00:00")
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		String snapshotUniqueIndexDefinition = jdbcTemplate.queryForObject(
+			"""
+				select indexdef
+				from pg_indexes
+				where schemaname = 'public'
+				  and indexname = 'uq_member_finance_snapshots_member_period'
+			""",
+			String.class
+		);
+
+		assertThat(snapshotUniqueIndexDefinition).isNotNull();
+		assertThat(snapshotUniqueIndexDefinition.toLowerCase())
+			.contains("create unique index uq_member_finance_snapshots_member_period")
+			.contains("on public.member_finance_snapshots")
+			.contains("member_id, period_year, period_month");
+	}
+
+	@Test
+	void familyDashboardSnapshotsSupportConstraintsForeignKeysAndUniquePeriod() {
+		UUID familyId = insertFamily("Fedorov family");
+		UUID snapshotId = UUID.randomUUID();
+
+		jdbcTemplate.update(
+			"""
+				insert into family_dashboard_snapshots (
+				    id,
+				    family_id,
+				    period_year,
+				    period_month,
+				    status,
+				    status_text,
+				    status_reason,
+				    monthly_income,
+				    monthly_expenses,
+				    credit_load_percent,
+				    emergency_fund_months,
+				    member_count_used,
+				    calculated_at
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			""",
+			snapshotId,
+			familyId,
+			2026,
+			3,
+			"warning",
+			"Внимание",
+			"Подушка ниже комфортной зоны",
+			210000,
+			90000,
+			new BigDecimal("27.00"),
+			new BigDecimal("4.20"),
+			2,
+			atMoscow("2026-03-15T09:00:00")
+		);
+
+		Map<String, Object> dashboardRow = jdbcTemplate.queryForMap(
+			"""
+				select created_at, updated_at
+				from family_dashboard_snapshots
+				where id = ?
+			""",
+			snapshotId
+		);
+
+		assertThat(dashboardRow.get("created_at")).isNotNull();
+		assertThat(dashboardRow.get("updated_at")).isNotNull();
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into family_dashboard_snapshots (
+				    id,
+				    family_id,
+				    period_year,
+				    period_month,
+				    status,
+				    status_text,
+				    status_reason,
+				    monthly_income,
+				    monthly_expenses,
+				    credit_load_percent,
+				    emergency_fund_months,
+				    member_count_used,
+				    calculated_at
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			""",
+			UUID.randomUUID(),
+			familyId,
+			2026,
+			3,
+			"normal",
+			"Норма",
+			"Дубликат периода",
+			200000,
+			80000,
+			new BigDecimal("20.00"),
+			new BigDecimal("5.00"),
+			2,
+			atMoscow("2026-03-16T09:00:00")
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into family_dashboard_snapshots (
+				    id,
+				    family_id,
+				    period_year,
+				    period_month,
+				    status,
+				    status_text,
+				    status_reason,
+				    monthly_income,
+				    monthly_expenses,
+				    credit_load_percent,
+				    emergency_fund_months,
+				    member_count_used,
+				    calculated_at
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			""",
+			UUID.randomUUID(),
+			familyId,
+			2026,
+			13,
+			"normal",
+			"Норма",
+			"Неверный месяц",
+			200000,
+			80000,
+			new BigDecimal("20.00"),
+			new BigDecimal("5.00"),
+			2,
+			atMoscow("2026-04-16T09:00:00")
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into family_dashboard_snapshots (
+				    id,
+				    family_id,
+				    period_year,
+				    period_month,
+				    status,
+				    status_text,
+				    status_reason,
+				    monthly_income,
+				    monthly_expenses,
+				    credit_load_percent,
+				    emergency_fund_months,
+				    member_count_used,
+				    calculated_at
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			""",
+			UUID.randomUUID(),
+			familyId,
+			2026,
+			4,
+			"critical",
+			"Критично",
+			"Неверный статус",
+			200000,
+			80000,
+			new BigDecimal("20.00"),
+			new BigDecimal("5.00"),
+			2,
+			atMoscow("2026-04-16T09:00:00")
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into family_dashboard_snapshots (
+				    id,
+				    family_id,
+				    period_year,
+				    period_month,
+				    status,
+				    status_text,
+				    status_reason,
+				    monthly_income,
+				    monthly_expenses,
+				    credit_load_percent,
+				    emergency_fund_months,
+				    member_count_used,
+				    calculated_at
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			""",
+			UUID.randomUUID(),
+			familyId,
+			2026,
+			4,
+			"risk",
+			"Риск",
+			"Неверный счетчик",
+			200000,
+			80000,
+			new BigDecimal("20.00"),
+			new BigDecimal("5.00"),
+			-1,
+			atMoscow("2026-04-16T09:00:00")
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbcTemplate.update(
+			"""
+				insert into family_dashboard_snapshots (
+				    id,
+				    family_id,
+				    period_year,
+				    period_month,
+				    status,
+				    status_text,
+				    status_reason,
+				    monthly_income,
+				    monthly_expenses,
+				    credit_load_percent,
+				    emergency_fund_months,
+				    member_count_used,
+				    calculated_at
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			""",
+			UUID.randomUUID(),
+			UUID.randomUUID(),
+			2026,
+			4,
+			"risk",
+			"Риск",
+			"Неверная семья",
+			200000,
+			80000,
+			new BigDecimal("20.00"),
+			new BigDecimal("5.00"),
+			1,
+			atMoscow("2026-04-16T09:00:00")
+		)).isInstanceOf(DataIntegrityViolationException.class);
+
+		String dashboardUniqueIndexDefinition = jdbcTemplate.queryForObject(
+			"""
+				select indexdef
+				from pg_indexes
+				where schemaname = 'public'
+				  and indexname = 'uq_family_dashboard_snapshots_family_period'
+			""",
+			String.class
+		);
+
+		assertThat(dashboardUniqueIndexDefinition).isNotNull();
+		assertThat(dashboardUniqueIndexDefinition.toLowerCase())
+			.contains("create unique index uq_family_dashboard_snapshots_family_period")
+			.contains("on public.family_dashboard_snapshots")
+			.contains("family_id, period_year, period_month");
+	}
+
+	private Boolean migrationApplied(String version) {
+		return jdbcTemplate.queryForObject(
+			"""
+				select success
+				from flyway_schema_history
+				where version = ?
+			""",
+			Boolean.class,
+			version
+		);
+	}
+
 	private boolean tableExists(String tableName) {
 		Integer tableCount = jdbcTemplate.queryForObject(
 			"""
@@ -477,6 +1544,123 @@ class FlywayReferenceMigrationSmokeTest {
 			firstName
 		);
 		return memberId;
+	}
+
+	private UUID insertPayrollSchedule(UUID memberId, int dayOfMonth) {
+		UUID payrollScheduleId = UUID.randomUUID();
+		jdbcTemplate.update(
+			"""
+				insert into member_payroll_schedules (id, member_id, schedule_type, day_of_month)
+				values (?, ?, ?, ?)
+			""",
+			payrollScheduleId,
+			memberId,
+			"fixed_day_of_month",
+			dayOfMonth
+		);
+		return payrollScheduleId;
+	}
+
+	private UUID insertLlmCollectionRequest(
+		UUID familyId,
+		UUID memberId,
+		UUID payrollScheduleId,
+		int periodYear,
+		int periodMonth,
+		int dayOfMonth
+	) {
+		UUID requestId = UUID.randomUUID();
+		LocalDate payrollDate = LocalDate.of(periodYear, periodMonth, dayOfMonth);
+		jdbcTemplate.update(
+			"""
+				insert into llm_collection_requests (
+				    id,
+				    request_id,
+				    family_id,
+				    member_id,
+				    payroll_schedule_id,
+				    period_year,
+				    period_month,
+				    reason,
+				    status,
+				    requested_fields,
+				    nominal_payroll_date,
+				    effective_payroll_date,
+				    scheduled_trigger_date,
+				    triggered_at,
+				    request_payload
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?, cast(? as jsonb))
+			""",
+			requestId,
+			"req-" + UUID.randomUUID(),
+			familyId,
+			memberId,
+			payrollScheduleId,
+			periodYear,
+			periodMonth,
+			"day_after_salary",
+			"pending",
+			"[\"monthly_income\",\"monthly_expenses\",\"monthly_credit_payments\",\"liquid_savings\"]",
+			payrollDate,
+			payrollDate,
+			payrollDate.plusDays(1),
+			payrollDate.plusDays(1).atTime(9, 0).atOffset(MOSCOW_OFFSET),
+			"{\"request_id\":\"seed-request\"}"
+		);
+		return requestId;
+	}
+
+	private UUID insertFinanceSubmission(
+		UUID familyId,
+		UUID memberId,
+		UUID llmCollectionRequestId,
+		String externalSubmissionId,
+		int periodYear,
+		int periodMonth,
+		int monthlyIncome
+	) {
+		UUID submissionId = UUID.randomUUID();
+		jdbcTemplate.update(
+			"""
+				insert into finance_submissions (
+				    id,
+				    external_submission_id,
+				    llm_collection_request_id,
+				    family_id,
+				    member_id,
+				    source,
+				    period_year,
+				    period_month,
+				    collected_at,
+				    monthly_income,
+				    monthly_expenses,
+				    monthly_credit_payments,
+				    liquid_savings,
+				    raw_payload
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb))
+			""",
+			submissionId,
+			externalSubmissionId,
+			llmCollectionRequestId,
+			familyId,
+			memberId,
+			"telegram",
+			periodYear,
+			periodMonth,
+			OffsetDateTime.of(periodYear, periodMonth, 20, 9, 0, 0, 0, MOSCOW_OFFSET),
+			monthlyIncome,
+			40000,
+			10000,
+			90000,
+			"{\"external_submission_id\":\"" + externalSubmissionId + "\"}"
+		);
+		return submissionId;
+	}
+
+	private OffsetDateTime atMoscow(String localDateTime) {
+		return OffsetDateTime.parse(localDateTime + "+03:00");
 	}
 
 }
