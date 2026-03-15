@@ -3,9 +3,9 @@ spring:
     activate:
       on-profile: local
   datasource:
-    url: jdbc:postgresql://localhost:5432/family_finance_metre
-    username: postgres
-    password: postgres
+    url: jdbc:postgresql://192.168.1.70:5432/family_finance_metre_db
+    username: family_finance_metre_db
+    password: family_finance_metre_db
     driver-class-name: org.postgresql.Driver
 
 app:
