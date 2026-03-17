@@ -56,6 +56,28 @@ class UserFinanceIntakeControllerIntegrationTest {
 	}
 
 	@Test
+	void payloadWithRequestIdReturnsAccepted() throws Exception {
+		given(intakeSubmissionService.accept(any())).willReturn(new UserFinanceIntakeAcceptedResponse(
+			"accepted",
+			"subm_001",
+			"11111111-1111-1111-1111-111111111111",
+			"22222222-2222-2222-2222-222222222222",
+			true
+		));
+
+		mockMvc.perform(post("/api/v1/intake/user-finance-data")
+				.header("X-API-Key", API_KEY)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(validPayloadWithRequestId()))
+			.andExpect(status().isAccepted())
+			.andExpect(jsonPath("$.status").value("accepted"))
+			.andExpect(jsonPath("$.submission_id").isString())
+			.andExpect(jsonPath("$.family_id").value("11111111-1111-1111-1111-111111111111"))
+			.andExpect(jsonPath("$.member_id").value("22222222-2222-2222-2222-222222222222"))
+			.andExpect(jsonPath("$.recalculation_scheduled").value(true));
+	}
+
+	@Test
 	void missingApiKeyReturnsUnauthorized() throws Exception {
 		mockMvc.perform(post("/api/v1/intake/user-finance-data")
 				.contentType(MediaType.APPLICATION_JSON)
@@ -186,6 +208,34 @@ class UserFinanceIntakeControllerIntegrationTest {
 		return """
 			{
 			  "external_submission_id": "n8n-run-2026-03-15-001",
+			  "family_id": "11111111-1111-1111-1111-111111111111",
+			  "member_id": "22222222-2222-2222-2222-222222222222",
+			  "source": "telegram",
+			  "collected_at": "2026-03-15T08:40:00+03:00",
+			  "period": {
+			    "year": 2026,
+			    "month": 3
+			  },
+			  "finance_input": {
+			    "monthly_income": 120000,
+			    "monthly_expenses": 50000,
+			    "monthly_credit_payments": 18000,
+			    "liquid_savings": 150000
+			  },
+			  "meta": {
+			    "telegram_chat_id": "123456789",
+			    "confidence": "medium",
+			    "notes": "User provided approximate values"
+			  }
+			}
+			""";
+	}
+
+	private String validPayloadWithRequestId() {
+		return """
+			{
+			  "external_submission_id": "n8n-run-2026-03-15-001",
+			  "request_id": "req-2026-03-15-member-anna",
 			  "family_id": "11111111-1111-1111-1111-111111111111",
 			  "member_id": "22222222-2222-2222-2222-222222222222",
 			  "source": "telegram",

@@ -16,6 +16,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record UserFinanceIntakeRequest(
 	@JsonProperty("external_submission_id") @NotBlank String externalSubmissionId,
+	@JsonProperty("request_id") String requestId,
 	@JsonProperty("family_id") @NotBlank @Pattern(
 		regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
 		message = "must be a valid UUID"
