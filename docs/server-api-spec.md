@@ -126,8 +126,8 @@ X-Device-Token: <device-token>
 - `status` - машинное значение статуса: `normal`, `warning`, `risk`
 - `status_text` - короткий текст для UI
 - `status_reason` - короткая причина для второй строки на экране
-- `metrics.monthly_income` - средний месячный доход семьи
-- `metrics.monthly_expenses` - средние месячные расходы семьи
+- `metrics.monthly_income` - суммарный доход семьи за месяц
+- `metrics.monthly_expenses` - актуальная оценка расходов семьи за месяц на текущий момент
 - `metrics.credit_load_percent` - кредитная нагрузка в процентах
 - `metrics.emergency_fund_months` - подушка в месяцах
 - `display.currency` - валюта отображения
@@ -228,15 +228,22 @@ Content-Type: application/json
 - `collected_at` - когда опрос был завершен
 - `period.year` - год, к которому относятся данные
 - `period.month` - месяц, к которому относятся данные
-- `finance_input.monthly_income` - месячный доход пользователя
-- `finance_input.monthly_expenses` - месячные расходы именно этого пользователя
-- `finance_input.monthly_credit_payments` - ежемесячные платежи по кредитам
-- `finance_input.liquid_savings` - доступные накопления именно этого пользователя
+- `finance_input.monthly_income` - сумма дохода, относящаяся именно к текущей выплате или payroll-событию
+- `finance_input.monthly_expenses` - актуальная оценка всех расходов пользователя за весь месяц на текущий момент
+- `finance_input.monthly_credit_payments` - актуальная оценка всех платежей по кредитам за весь месяц на текущий момент
+- `finance_input.liquid_savings` - доступные накопления пользователя на момент опроса
 - `meta.telegram_chat_id` - чат пользователя в Telegram
 - `meta.confidence` - необязательная оценка уверенности: `low`, `medium`, `high`
 - `meta.notes` - необязательный комментарий
 
 Если `request_id` не передан, сервер все равно принимает payload и обрабатывает его как обычный intake без связки с конкретным `llm_collection_request`.
+
+### Семантика intake при нескольких выплатах в месяц
+
+- один payload соответствует одному payroll-событию;
+- если у человека в одном месяце две или три выплаты, `n8n` отправляет отдельный payload на каждую выплату;
+- сервер суммирует `finance_input.monthly_income` по всем payload за один `member_id + period_year + period_month`;
+- поля `finance_input.monthly_expenses`, `finance_input.monthly_credit_payments` и `finance_input.liquid_savings` в месячном snapshot берутся из самой свежей submission за период как текущая оценка на момент последнего опроса.
 
 ### Ответ `202 Accepted`
 

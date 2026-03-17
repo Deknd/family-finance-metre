@@ -280,17 +280,18 @@ Spring-реализация:
 
 Что сделать:
 
-- по `member_id + period_year + period_month` обновлять или создавать актуальный снимок;
-- использовать самый свежий `finance_submission`.
+- по `member_id + period_year + period_month` пересчитывать месячный снимок;
+- суммировать `monthly_income` по всем `finance_submission` за период;
+- использовать самую свежую `finance_submission` для `monthly_expenses`, `monthly_credit_payments`, `liquid_savings`, `source_submission_id` и `collected_at`.
 
 Spring-реализация:
 
 - отдельный application service;
-- update/create внутри одной транзакции.
+- пересчет snapshot внутри одной транзакции.
 
 Результат:
 
-- у сервера всегда есть актуальные месячные данные по каждому человеку.
+- у сервера всегда есть актуальные месячные данные по каждому человеку с корректной суммой всех выплат за месяц.
 
 ## Задача 14. Реализовать сервис агрегации семейных метрик
 
@@ -352,7 +353,7 @@ Spring-реализация:
 Spring-реализация:
 
 - orchestration service, который после intake вызывает:
-- обновление `member_finance_snapshots`
+- пересчет `member_finance_snapshots`
 - перерасчет family aggregate
 - сохранение `family_dashboard_snapshots`
 
