@@ -4,6 +4,7 @@ import com.deknd.familyfinancemetre.dto.validation.ValidationErrorResponse;
 import com.deknd.familyfinancemetre.dto.validation.ValidationErrorResponse.ValidationErrorDetail;
 import com.deknd.familyfinancemetre.entity.enums.DatabaseEnum;
 import com.deknd.familyfinancemetre.exception.DuplicateSubmissionException;
+import com.deknd.familyfinancemetre.exception.InvalidIntakePayloadReferenceException;
 import com.deknd.familyfinancemetre.security.ApiErrorResponse;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
@@ -36,6 +37,12 @@ public class ApiValidationExceptionHandler {
 	private static final String VALIDATION_ERROR_MESSAGE = "Request validation failed";
 	private static final Pattern MESSAGE_PATH_PATTERN = Pattern.compile("\\[\"([^\"]+)\"]");
 
+	/**
+	 * Возвращает ошибки bean validation для невалидного request body.
+	 *
+	 * @param exception исключение валидации аргумента контроллера
+	 * @return ответ с деталями ошибок валидации
+	 */
 	@ExceptionHandler(MethodArgumentNotValidException.class)
 	public ResponseEntity<ValidationErrorResponse> handleMethodArgumentNotValid(MethodArgumentNotValidException exception) {
 		List<ValidationErrorDetail> details = exception.getBindingResult().getAllErrors().stream()
@@ -46,6 +53,12 @@ public class ApiValidationExceptionHandler {
 		return buildValidationErrorResponse(details);
 	}
 
+	/**
+	 * Возвращает ошибки биндинга query/path параметров в едином формате валидации.
+	 *
+	 * @param exception исключение биндинга входных данных запроса
+	 * @return ответ с деталями ошибок валидации
+	 */
 	@ExceptionHandler(BindException.class)
 	public ResponseEntity<ValidationErrorResponse> handleBindException(BindException exception) {
 		List<ValidationErrorDetail> details = exception.getBindingResult().getAllErrors().stream()
@@ -56,15 +69,40 @@ public class ApiValidationExceptionHandler {
 		return buildValidationErrorResponse(details);
 	}
 
+	/**
+	 * Возвращает читаемую ошибку, если тело запроса не удалось разобрать.
+	 *
+	 * @param exception исключение разбора JSON тела запроса
+	 * @return ответ с одной деталью ошибки чтения тела запроса
+	 */
 	@ExceptionHandler(HttpMessageNotReadableException.class)
 	public ResponseEntity<ValidationErrorResponse> handleHttpMessageNotReadable(HttpMessageNotReadableException exception) {
 		return buildValidationErrorResponse(List.of(extractReadableErrorDetail(exception)));
 	}
 
+	/**
+	 * Возвращает ошибку конфликта при повторной отправке уже обработанного payload.
+	 *
+	 * @param exception исключение о дублирующейся отправке
+	 * @return ответ с кодом конфликта и описанием ошибки
+	 */
 	@ExceptionHandler(DuplicateSubmissionException.class)
 	public ResponseEntity<ApiErrorResponse> handleDuplicateSubmission(DuplicateSubmissionException exception) {
 		return ResponseEntity.status(HttpStatus.CONFLICT)
 			.body(ApiErrorResponse.of(DuplicateSubmissionException.ERROR_CODE, exception.getMessage()));
+	}
+
+	/**
+	 * Возвращает доменные ошибки валидации ссылок intake payload.
+	 *
+	 * @param exception исключение с деталями невалидных ссылок payload
+	 * @return ответ с деталями доменной валидации intake payload
+	 */
+	@ExceptionHandler(InvalidIntakePayloadReferenceException.class)
+	public ResponseEntity<ValidationErrorResponse> handleInvalidIntakePayloadReference(
+		InvalidIntakePayloadReferenceException exception
+	) {
+		return buildValidationErrorResponse(exception.getDetails());
 	}
 
 	private ResponseEntity<ValidationErrorResponse> buildValidationErrorResponse(List<ValidationErrorDetail> details) {

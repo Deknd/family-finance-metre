@@ -35,6 +35,8 @@ class UserFinanceIntakePersistenceIntegrationTest {
 	private static final String API_KEY = "migration-n8n-api-key";
 	private static final UUID FAMILY_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 	private static final UUID MEMBER_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
+	private static final UUID ANOTHER_FAMILY_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
+	private static final UUID ANOTHER_MEMBER_ID = UUID.fromString("55555555-5555-5555-5555-555555555555");
 
 	@Container
 	static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
@@ -134,15 +136,58 @@ class UserFinanceIntakePersistenceIntegrationTest {
 		assertThat(submissionsCount).isEqualTo(1);
 	}
 
+	@Test
+	void missingFamilyReferenceReturnsValidationErrorAndDoesNotPersistSubmission() throws Exception {
+		mockMvc.perform(post("/api/v1/intake/user-finance-data")
+				.header("X-API-Key", API_KEY)
+				.contentType(APPLICATION_JSON)
+				.content(validPayload().replace(
+					"\"family_id\": \"11111111-1111-1111-1111-111111111111\"",
+					"\"family_id\": \"44444444-4444-4444-4444-444444444444\""
+				)))
+			.andExpect(status().isUnprocessableEntity())
+			.andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"))
+			.andExpect(jsonPath("$.details[0].field").value("family_id"))
+			.andExpect(jsonPath("$.details[0].message").value("family does not exist"));
+
+		Integer submissionsCount = jdbcTemplate.queryForObject("select count(*) from finance_submissions", Integer.class);
+		assertThat(submissionsCount).isZero();
+	}
+
+	@Test
+	void memberFromAnotherFamilyReturnsValidationErrorAndDoesNotPersistSubmission() throws Exception {
+		insertFamily(ANOTHER_FAMILY_ID, "Another family");
+		insertMember(ANOTHER_MEMBER_ID, ANOTHER_FAMILY_ID, "Olga", "Petrova", "olga_petrova");
+
+		mockMvc.perform(post("/api/v1/intake/user-finance-data")
+				.header("X-API-Key", API_KEY)
+				.contentType(APPLICATION_JSON)
+				.content(validPayload().replace(
+					"\"member_id\": \"22222222-2222-2222-2222-222222222222\"",
+					"\"member_id\": \"55555555-5555-5555-5555-555555555555\""
+				)))
+			.andExpect(status().isUnprocessableEntity())
+			.andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"))
+			.andExpect(jsonPath("$.details[0].field").value("member_id"))
+			.andExpect(jsonPath("$.details[0].message").value("member does not belong to the specified family"));
+
+		Integer submissionsCount = jdbcTemplate.queryForObject("select count(*) from finance_submissions", Integer.class);
+		assertThat(submissionsCount).isZero();
+	}
+
 	private void insertFamily() {
+		insertFamily(FAMILY_ID, "Demo family");
+	}
+
+	private void insertFamily(UUID familyId, String familyName) {
 		OffsetDateTime now = OffsetDateTime.parse("2026-03-15T09:00:00+03:00");
 		jdbcTemplate.update(
 			"""
 				insert into families (id, name, timezone, currency_code, status, created_at, updated_at)
 				values (?, ?, ?, ?, ?, ?, ?)
 				""",
-			FAMILY_ID,
-			"Demo family",
+			familyId,
+			familyName,
 			"Europe/Moscow",
 			"RUB",
 			"active",
@@ -152,6 +197,16 @@ class UserFinanceIntakePersistenceIntegrationTest {
 	}
 
 	private void insertMember() {
+		insertMember(MEMBER_ID, FAMILY_ID, "Anna", "Ivanova", "anna_ivanova");
+	}
+
+	private void insertMember(
+		UUID memberId,
+		UUID familyId,
+		String firstName,
+		String lastName,
+		String telegramUsername
+	) {
 		OffsetDateTime now = OffsetDateTime.parse("2026-03-15T09:05:00+03:00");
 		jdbcTemplate.update(
 			"""
@@ -169,13 +224,13 @@ class UserFinanceIntakePersistenceIntegrationTest {
 				)
 				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				""",
-			MEMBER_ID,
-			FAMILY_ID,
-			"Anna",
-			"Ivanova",
-			"Anna",
-			"123456789",
-			"anna_ivanova",
+			memberId,
+			familyId,
+			firstName,
+			lastName,
+			firstName,
+			"chat-" + memberId,
+			telegramUsername,
 			true,
 			now,
 			now
