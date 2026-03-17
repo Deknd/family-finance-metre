@@ -195,6 +195,7 @@ Content-Type: application/json
 ```json
 {
   "external_submission_id": "n8n-run-2026-03-15-001",
+  "request_id": "req_2026_03_15_member_anna",
   "family_id": "family_01",
   "member_id": "member_anna",
   "source": "telegram",
@@ -220,6 +221,7 @@ Content-Type: application/json
 ### Поля запроса
 
 - `external_submission_id` - уникальный id отправки со стороны `n8n`
+- `request_id` - необязательный correlation id исходного запуска опроса со стороны сервера
 - `family_id` - идентификатор семьи
 - `member_id` - идентификатор члена семьи, которого опрашивали
 - `source` - источник данных, для MVP ожидается `telegram`
@@ -233,6 +235,8 @@ Content-Type: application/json
 - `meta.telegram_chat_id` - чат пользователя в Telegram
 - `meta.confidence` - необязательная оценка уверенности: `low`, `medium`, `high`
 - `meta.notes` - необязательный комментарий
+
+Если `request_id` не передан, сервер все равно принимает payload и обрабатывает его как обычный intake без связки с конкретным `llm_collection_request`.
 
 ### Ответ `202 Accepted`
 

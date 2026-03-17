@@ -91,6 +91,7 @@ class IntakeSubmissionServiceTest {
 		assertThat(savedSubmission.getConfidence()).isEqualTo(SubmissionConfidence.MEDIUM);
 		assertThat(savedSubmission.getNotes()).isEqualTo("User provided approximate values");
 		assertThat(savedSubmission.getRawPayload().get("external_submission_id").asText()).isEqualTo("n8n-run-2026-03-15-001");
+		assertThat(savedSubmission.getRawPayload().has("request_id")).isFalse();
 		assertThat(savedSubmission.getRequestId()).isNull();
 		assertThat(savedSubmission.getLlmCollectionRequest()).isNull();
 
@@ -182,6 +183,31 @@ class IntakeSubmissionServiceTest {
 	}
 
 	@Test
+	void acceptSavesRequestIdWhenItIsPresentInPayload() {
+		UserFinanceIntakeRequest request = validRequest("req-2026-03-15-member-anna");
+		FamilyEntity family = family(FAMILY_ID);
+		FamilyMemberEntity member = member(MEMBER_ID, family);
+
+		given(financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())).willReturn(false);
+		given(familyRepository.findById(FAMILY_ID)).willReturn(Optional.of(family));
+		given(familyMemberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
+		doAnswer(invocation -> {
+			FinanceSubmissionEntity submission = invocation.getArgument(0);
+			submission.setId(SUBMISSION_ID);
+			return submission;
+		}).when(financeSubmissionRepository).saveAndFlush(any(FinanceSubmissionEntity.class));
+
+		intakeSubmissionService.accept(request);
+
+		ArgumentCaptor<FinanceSubmissionEntity> submissionCaptor = ArgumentCaptor.forClass(FinanceSubmissionEntity.class);
+		verify(financeSubmissionRepository).saveAndFlush(submissionCaptor.capture());
+
+		FinanceSubmissionEntity savedSubmission = submissionCaptor.getValue();
+		assertThat(savedSubmission.getRequestId()).isEqualTo("req-2026-03-15-member-anna");
+		assertThat(savedSubmission.getRawPayload().get("request_id").asText()).isEqualTo("req-2026-03-15-member-anna");
+	}
+
+	@Test
 	void acceptThrowsValidationErrorWhenMemberDoesNotExist() {
 		UserFinanceIntakeRequest request = validRequest();
 		FamilyEntity family = family(FAMILY_ID);
@@ -252,8 +278,13 @@ class IntakeSubmissionServiceTest {
 	}
 
 	private UserFinanceIntakeRequest validRequest() {
+		return validRequest(null);
+	}
+
+	private UserFinanceIntakeRequest validRequest(String requestId) {
 		return new UserFinanceIntakeRequest(
 			"n8n-run-2026-03-15-001",
+			requestId,
 			FAMILY_ID.toString(),
 			MEMBER_ID.toString(),
 			"telegram",

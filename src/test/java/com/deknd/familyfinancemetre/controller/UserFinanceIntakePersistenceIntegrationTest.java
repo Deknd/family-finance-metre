@@ -137,6 +137,35 @@ class UserFinanceIntakePersistenceIntegrationTest {
 	}
 
 	@Test
+	void payloadWithRequestIdPersistsCorrelationId() throws Exception {
+		String responseBody = mockMvc.perform(post("/api/v1/intake/user-finance-data")
+				.header("X-API-Key", API_KEY)
+				.contentType(APPLICATION_JSON)
+				.content(validPayloadWithRequestId()))
+			.andExpect(status().isAccepted())
+			.andReturn()
+			.getResponse()
+			.getContentAsString();
+
+		JsonNode responseJson = objectMapper.readTree(responseBody);
+		UUID submissionId = UUID.fromString(responseJson.get("submission_id").asText());
+
+		Map<String, Object> storedRow = jdbcTemplate.queryForMap(
+			"""
+				select
+					request_id,
+					raw_payload ->> 'request_id' as raw_request_id
+				from finance_submissions
+				where id = ?
+				""",
+			submissionId
+		);
+
+		assertThat(storedRow.get("request_id")).isEqualTo("req-2026-03-15-member-anna");
+		assertThat(storedRow.get("raw_request_id")).isEqualTo("req-2026-03-15-member-anna");
+	}
+
+	@Test
 	void missingFamilyReferenceReturnsValidationErrorAndDoesNotPersistSubmission() throws Exception {
 		mockMvc.perform(post("/api/v1/intake/user-finance-data")
 				.header("X-API-Key", API_KEY)
@@ -241,6 +270,34 @@ class UserFinanceIntakePersistenceIntegrationTest {
 		return """
 			{
 			  "external_submission_id": "n8n-run-2026-03-15-001",
+			  "family_id": "11111111-1111-1111-1111-111111111111",
+			  "member_id": "22222222-2222-2222-2222-222222222222",
+			  "source": "telegram",
+			  "collected_at": "2026-03-15T08:40:00+03:00",
+			  "period": {
+			    "year": 2026,
+			    "month": 3
+			  },
+			  "finance_input": {
+			    "monthly_income": 120000,
+			    "monthly_expenses": 50000,
+			    "monthly_credit_payments": 18000,
+			    "liquid_savings": 150000
+			  },
+			  "meta": {
+			    "telegram_chat_id": "123456789",
+			    "confidence": "medium",
+			    "notes": "User provided approximate values"
+			  }
+			}
+			""";
+	}
+
+	private String validPayloadWithRequestId() {
+		return """
+			{
+			  "external_submission_id": "n8n-run-2026-03-15-001",
+			  "request_id": "req-2026-03-15-member-anna",
 			  "family_id": "11111111-1111-1111-1111-111111111111",
 			  "member_id": "22222222-2222-2222-2222-222222222222",
 			  "source": "telegram",

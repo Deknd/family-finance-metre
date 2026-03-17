@@ -15,6 +15,7 @@ import com.deknd.familyfinancemetre.repository.FamilyRepository;
 import com.deknd.familyfinancemetre.repository.FinanceSubmissionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.transaction.Transactional;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -115,8 +116,15 @@ public class IntakeSubmissionService {
 		FamilyEntity family,
 		FamilyMemberEntity member
 	) {
+		ObjectNode rawPayload = OBJECT_MAPPER.valueToTree(request);
+		String requestId = normalizeOptionalRequestId(request.requestId());
+		if (requestId == null) {
+			rawPayload.remove("request_id");
+		}
+
 		FinanceSubmissionEntity submission = new FinanceSubmissionEntity();
 		submission.setExternalSubmissionId(request.externalSubmissionId());
+		submission.setRequestId(requestId);
 		submission.setFamily(family);
 		submission.setMember(member);
 		submission.setSource(SubmissionSource.valueOf(request.source().toUpperCase(Locale.ROOT)));
@@ -129,8 +137,16 @@ public class IntakeSubmissionService {
 		submission.setLiquidSavings(request.financeInput().liquidSavings());
 		submission.setConfidence(resolveConfidence(request.meta().confidence()));
 		submission.setNotes(request.meta().notes());
-		submission.setRawPayload(OBJECT_MAPPER.valueToTree(request));
+		submission.setRawPayload(rawPayload);
 		return submission;
+	}
+
+	private String normalizeOptionalRequestId(String requestId) {
+		if (requestId == null || requestId.isBlank()) {
+			return null;
+		}
+
+		return requestId;
 	}
 
 	private SubmissionConfidence resolveConfidence(String confidence) {
