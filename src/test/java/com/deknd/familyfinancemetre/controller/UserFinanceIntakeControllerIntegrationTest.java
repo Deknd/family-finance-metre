@@ -1,6 +1,8 @@
 package com.deknd.familyfinancemetre.controller;
 
 import com.deknd.familyfinancemetre.dto.intake.UserFinanceIntakeAcceptedResponse;
+import com.deknd.familyfinancemetre.dto.validation.ValidationErrorResponse.ValidationErrorDetail;
+import com.deknd.familyfinancemetre.exception.InvalidIntakePayloadReferenceException;
 import com.deknd.familyfinancemetre.service.IntakeSubmissionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -155,6 +157,29 @@ class UserFinanceIntakeControllerIntegrationTest {
 			.andExpect(status().isUnprocessableEntity())
 			.andExpect(jsonPath("$.details[0].field").value("body"))
 			.andExpect(jsonPath("$.details[0].message").value("Malformed JSON request"));
+	}
+
+	@Test
+	void invalidPayloadReferencesReturnValidationError() throws Exception {
+		given(intakeSubmissionService.accept(any()))
+			.willThrow(new InvalidIntakePayloadReferenceException(
+				java.util.List.of(
+					new ValidationErrorDetail("family_id", "family does not exist"),
+					new ValidationErrorDetail("member_id", "member does not exist")
+				)
+			));
+
+		mockMvc.perform(post("/api/v1/intake/user-finance-data")
+				.header("X-API-Key", API_KEY)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(validPayload()))
+			.andExpect(status().isUnprocessableEntity())
+			.andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"))
+			.andExpect(jsonPath("$.error.message").value("Request validation failed"))
+			.andExpect(jsonPath("$.details[0].field").value("family_id"))
+			.andExpect(jsonPath("$.details[0].message").value("family does not exist"))
+			.andExpect(jsonPath("$.details[1].field").value("member_id"))
+			.andExpect(jsonPath("$.details[1].message").value("member does not exist"));
 	}
 
 	private String validPayload() {

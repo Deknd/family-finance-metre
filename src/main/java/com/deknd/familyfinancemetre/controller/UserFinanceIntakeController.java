@@ -21,6 +21,12 @@ public class UserFinanceIntakeController {
 		this.intakeSubmissionService = intakeSubmissionService;
 	}
 
+	/**
+	 * Принимает валидный intake payload от n8n и передает его в сервис обработки.
+	 *
+	 * @param request входной payload с финансовыми данными пользователя
+	 * @return ответ о принятии payload в обработку
+	 */
 	@PostMapping("/user-finance-data")
 	@ResponseStatus(HttpStatus.ACCEPTED)
 	public UserFinanceIntakeAcceptedResponse accept(@Valid @RequestBody UserFinanceIntakeRequest request) {
