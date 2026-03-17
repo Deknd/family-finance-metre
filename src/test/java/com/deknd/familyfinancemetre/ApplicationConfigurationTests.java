@@ -2,11 +2,13 @@ package com.deknd.familyfinancemetre;
 
 import com.deknd.familyfinancemetre.config.ApplicationProperties;
 import com.deknd.familyfinancemetre.config.DatabaseProperties;
+import com.deknd.familyfinancemetre.service.IntakeSubmissionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.env.Environment;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -17,6 +19,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @ActiveProfiles("test")
 class ApplicationConfigurationTests {
+
+	@MockitoBean
+	private IntakeSubmissionService intakeSubmissionService;
 
 	@Autowired
 	private DatabaseProperties databaseProperties;

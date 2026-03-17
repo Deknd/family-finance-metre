@@ -1,10 +1,12 @@
 package com.deknd.familyfinancemetre;
 
+import com.deknd.familyfinancemetre.service.IntakeSubmissionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -15,6 +17,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @ActiveProfiles("test")
 class FamilyFinanceMetreApplicationTests {
+
+	@MockitoBean
+	private IntakeSubmissionService intakeSubmissionService;
 
 	@Autowired
 	private MockMvc mockMvc;

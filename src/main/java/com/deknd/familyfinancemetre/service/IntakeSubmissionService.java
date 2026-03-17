@@ -2,18 +2,125 @@ package com.deknd.familyfinancemetre.service;
 
 import com.deknd.familyfinancemetre.dto.intake.UserFinanceIntakeAcceptedResponse;
 import com.deknd.familyfinancemetre.dto.intake.UserFinanceIntakeRequest;
+import com.deknd.familyfinancemetre.entity.FinanceSubmissionEntity;
+import com.deknd.familyfinancemetre.entity.enums.SubmissionConfidence;
+import com.deknd.familyfinancemetre.entity.enums.SubmissionSource;
+import com.deknd.familyfinancemetre.exception.DuplicateSubmissionException;
+import com.deknd.familyfinancemetre.repository.FamilyMemberRepository;
+import com.deknd.familyfinancemetre.repository.FamilyRepository;
+import com.deknd.familyfinancemetre.repository.FinanceSubmissionRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import jakarta.transaction.Transactional;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+
+import java.time.OffsetDateTime;
+import java.util.Locale;
+import java.util.UUID;
 
 @Service
 public class IntakeSubmissionService {
 
+	private static final String DUPLICATE_SUBMISSION_CONSTRAINT = "uq_finance_submissions_external_submission_id";
+	private static final ObjectMapper OBJECT_MAPPER = JsonMapper.builder().findAndAddModules().build();
+
+	private final FinanceSubmissionRepository financeSubmissionRepository;
+	private final FamilyRepository familyRepository;
+	private final FamilyMemberRepository familyMemberRepository;
+
+	public IntakeSubmissionService(
+		FinanceSubmissionRepository financeSubmissionRepository,
+		FamilyRepository familyRepository,
+		FamilyMemberRepository familyMemberRepository
+	) {
+		this.financeSubmissionRepository = financeSubmissionRepository;
+		this.familyRepository = familyRepository;
+		this.familyMemberRepository = familyMemberRepository;
+	}
+
+	/**
+	 * Принимает валидный intake payload, сохраняет его в {@code finance_submissions}
+	 * и защищает endpoint от повторной обработки одного и того же
+	 * {@code external_submission_id}.
+	 *
+	 * @param request входной payload от n8n после завершения опроса пользователя
+	 * @return ответ о принятии payload с идентификатором сохраненной submission
+	 * @throws DuplicateSubmissionException если payload с таким external submission id уже был обработан
+	 */
+	@Transactional
 	public UserFinanceIntakeAcceptedResponse accept(UserFinanceIntakeRequest request) {
+		if (financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())) {
+			throw new DuplicateSubmissionException();
+		}
+
+		FinanceSubmissionEntity submission = buildSubmission(request);
+		try {
+			financeSubmissionRepository.saveAndFlush(submission);
+		} catch (DataIntegrityViolationException exception) {
+			if (isDuplicateSubmissionViolation(exception)) {
+				throw new DuplicateSubmissionException(exception);
+			}
+			throw exception;
+		}
+
 		return new UserFinanceIntakeAcceptedResponse(
 			"accepted",
-			"subm_" + java.util.UUID.randomUUID(),
+			submission.getId().toString(),
 			request.familyId(),
 			request.memberId(),
 			true
 		);
+	}
+
+	private FinanceSubmissionEntity buildSubmission(UserFinanceIntakeRequest request) {
+		FinanceSubmissionEntity submission = new FinanceSubmissionEntity();
+		submission.setExternalSubmissionId(request.externalSubmissionId());
+		submission.setFamily(familyRepository.getReferenceById(UUID.fromString(request.familyId())));
+		submission.setMember(familyMemberRepository.getReferenceById(UUID.fromString(request.memberId())));
+		submission.setSource(SubmissionSource.valueOf(request.source().toUpperCase(Locale.ROOT)));
+		submission.setPeriodYear(request.period().year());
+		submission.setPeriodMonth(request.period().month().shortValue());
+		submission.setCollectedAt(OffsetDateTime.parse(request.collectedAt()));
+		submission.setMonthlyIncome(request.financeInput().monthlyIncome());
+		submission.setMonthlyExpenses(request.financeInput().monthlyExpenses());
+		submission.setMonthlyCreditPayments(request.financeInput().monthlyCreditPayments());
+		submission.setLiquidSavings(request.financeInput().liquidSavings());
+		submission.setConfidence(resolveConfidence(request.meta().confidence()));
+		submission.setNotes(request.meta().notes());
+		submission.setRawPayload(OBJECT_MAPPER.valueToTree(request));
+		return submission;
+	}
+
+	private SubmissionConfidence resolveConfidence(String confidence) {
+		if (confidence == null || confidence.isBlank()) {
+			return null;
+		}
+
+		return SubmissionConfidence.valueOf(confidence.toUpperCase(Locale.ROOT));
+	}
+
+	private boolean isDuplicateSubmissionViolation(DataIntegrityViolationException exception) {
+		Throwable current = exception;
+		while (current != null) {
+			if (current instanceof ConstraintViolationException constraintViolationException
+				&& DUPLICATE_SUBMISSION_CONSTRAINT.equalsIgnoreCase(constraintViolationException.getConstraintName())) {
+				return true;
+			}
+
+			String message = current.getMessage();
+			if (message != null) {
+				String normalizedMessage = message.toLowerCase(Locale.ROOT);
+				if (normalizedMessage.contains(DUPLICATE_SUBMISSION_CONSTRAINT)
+					|| normalizedMessage.contains("external_submission_id")) {
+					return true;
+				}
+			}
+
+			current = current.getCause();
+		}
+
+		return false;
 	}
 }

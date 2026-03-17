@@ -3,6 +3,8 @@ package com.deknd.familyfinancemetre.controller;
 import com.deknd.familyfinancemetre.dto.validation.ValidationErrorResponse;
 import com.deknd.familyfinancemetre.dto.validation.ValidationErrorResponse.ValidationErrorDetail;
 import com.deknd.familyfinancemetre.entity.enums.DatabaseEnum;
+import com.deknd.familyfinancemetre.exception.DuplicateSubmissionException;
+import com.deknd.familyfinancemetre.security.ApiErrorResponse;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
@@ -57,6 +59,12 @@ public class ApiValidationExceptionHandler {
 	@ExceptionHandler(HttpMessageNotReadableException.class)
 	public ResponseEntity<ValidationErrorResponse> handleHttpMessageNotReadable(HttpMessageNotReadableException exception) {
 		return buildValidationErrorResponse(List.of(extractReadableErrorDetail(exception)));
+	}
+
+	@ExceptionHandler(DuplicateSubmissionException.class)
+	public ResponseEntity<ApiErrorResponse> handleDuplicateSubmission(DuplicateSubmissionException exception) {
+		return ResponseEntity.status(HttpStatus.CONFLICT)
+			.body(ApiErrorResponse.of(DuplicateSubmissionException.ERROR_CODE, exception.getMessage()));
 	}
 
 	private ResponseEntity<ValidationErrorResponse> buildValidationErrorResponse(List<ValidationErrorDetail> details) {
