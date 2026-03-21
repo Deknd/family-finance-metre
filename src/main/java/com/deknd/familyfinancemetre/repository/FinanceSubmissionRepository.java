@@ -3,6 +3,7 @@ package com.deknd.familyfinancemetre.repository;
 import com.deknd.familyfinancemetre.entity.FinanceSubmissionEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface FinanceSubmissionRepository extends JpaRepository<FinanceSubmissionEntity, UUID> {
@@ -14,4 +15,19 @@ public interface FinanceSubmissionRepository extends JpaRepository<FinanceSubmis
 	 * @return {@code true}, если запись с таким external submission id уже существует
 	 */
 	boolean existsByExternalSubmissionId(String externalSubmissionId);
+
+	/**
+	 * Возвращает все intake submission участника за указанный период, отсортированные
+	 * от самой свежей записи к самой старой.
+	 *
+	 * @param memberId идентификатор участника семьи
+	 * @param periodYear год расчетного периода
+	 * @param periodMonth месяц расчетного периода
+	 * @return список submission за период в порядке убывания актуальности
+	 */
+	List<FinanceSubmissionEntity> findAllByMemberIdAndPeriodYearAndPeriodMonthOrderByCollectedAtDescCreatedAtDescIdDesc(
+		UUID memberId,
+		Integer periodYear,
+		Short periodMonth
+	);
 }

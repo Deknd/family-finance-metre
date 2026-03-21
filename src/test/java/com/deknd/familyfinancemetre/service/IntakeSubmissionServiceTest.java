@@ -53,6 +53,9 @@ class IntakeSubmissionServiceTest {
 	@Mock
 	private FamilyMemberRepository familyMemberRepository;
 
+	@Mock
+	private MemberFinanceSnapshotRecalculationService memberFinanceSnapshotRecalculationService;
+
 	@InjectMocks
 	private IntakeSubmissionService intakeSubmissionService;
 
@@ -94,6 +97,8 @@ class IntakeSubmissionServiceTest {
 		assertThat(savedSubmission.getRawPayload().has("request_id")).isFalse();
 		assertThat(savedSubmission.getRequestId()).isNull();
 		assertThat(savedSubmission.getLlmCollectionRequest()).isNull();
+		verify(memberFinanceSnapshotRecalculationService)
+			.recalculateForMemberPeriod(MEMBER_ID, 2026, (short) 3);
 
 		assertThat(response.status()).isEqualTo("accepted");
 		assertThat(response.submissionId()).isEqualTo(SUBMISSION_ID.toString());
@@ -205,6 +210,27 @@ class IntakeSubmissionServiceTest {
 		FinanceSubmissionEntity savedSubmission = submissionCaptor.getValue();
 		assertThat(savedSubmission.getRequestId()).isEqualTo("req-2026-03-15-member-anna");
 		assertThat(savedSubmission.getRawPayload().get("request_id").asText()).isEqualTo("req-2026-03-15-member-anna");
+	}
+
+	@Test
+	void acceptTriggersMemberSnapshotRecalculationForSavedSubmissionPeriod() {
+		UserFinanceIntakeRequest request = validRequest();
+		FamilyEntity family = family(FAMILY_ID);
+		FamilyMemberEntity member = member(MEMBER_ID, family);
+
+		given(financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())).willReturn(false);
+		given(familyRepository.findById(FAMILY_ID)).willReturn(Optional.of(family));
+		given(familyMemberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
+		doAnswer(invocation -> {
+			FinanceSubmissionEntity submission = invocation.getArgument(0);
+			submission.setId(SUBMISSION_ID);
+			return submission;
+		}).when(financeSubmissionRepository).saveAndFlush(any(FinanceSubmissionEntity.class));
+
+		intakeSubmissionService.accept(request);
+
+		verify(memberFinanceSnapshotRecalculationService)
+			.recalculateForMemberPeriod(MEMBER_ID, 2026, (short) 3);
 	}
 
 	@Test

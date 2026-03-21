@@ -4,6 +4,7 @@ import com.deknd.familyfinancemetre.dto.intake.UserFinanceIntakeAcceptedResponse
 import com.deknd.familyfinancemetre.dto.validation.ValidationErrorResponse.ValidationErrorDetail;
 import com.deknd.familyfinancemetre.exception.InvalidIntakePayloadReferenceException;
 import com.deknd.familyfinancemetre.service.IntakeSubmissionService;
+import com.deknd.familyfinancemetre.service.MemberFinanceSnapshotRecalculationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,6 +33,9 @@ class UserFinanceIntakeControllerIntegrationTest {
 
 	@MockitoBean
 	private IntakeSubmissionService intakeSubmissionService;
+
+	@MockitoBean
+	private MemberFinanceSnapshotRecalculationService memberFinanceSnapshotRecalculationService;
 
 	@Test
 	void validPayloadReturnsAccepted() throws Exception {
