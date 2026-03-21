@@ -61,13 +61,13 @@ class UserFinanceIntakePersistenceIntegrationTest {
 
 	@BeforeEach
 	void setUp() {
-		jdbcTemplate.execute("truncate table finance_submissions, family_members, families restart identity cascade");
+		jdbcTemplate.execute("truncate table member_finance_snapshots, finance_submissions, family_members, families restart identity cascade");
 		insertFamily();
 		insertMember();
 	}
 
 	@Test
-	void validPayloadPersistsSubmissionAndReturnsStoredId() throws Exception {
+	void validPayloadPersistsSubmissionCreatesMemberSnapshotAndReturnsStoredId() throws Exception {
 		String responseBody = mockMvc.perform(post("/api/v1/intake/user-finance-data")
 				.header("X-API-Key", API_KEY)
 				.contentType(APPLICATION_JSON)
@@ -109,6 +109,38 @@ class UserFinanceIntakePersistenceIntegrationTest {
 		assertThat(storedRow.get("monthly_credit_payments")).isEqualTo(18000);
 		assertThat(storedRow.get("liquid_savings")).isEqualTo(150000);
 		assertThat(storedRow.get("raw_external_submission_id")).isEqualTo("n8n-run-2026-03-15-001");
+
+		Map<String, Object> storedSnapshotRow = jdbcTemplate.queryForMap(
+			"""
+				select
+					family_id::text as family_id,
+					member_id::text as member_id,
+					period_year,
+					period_month,
+					source_submission_id::text as source_submission_id,
+					monthly_income,
+					monthly_expenses,
+					monthly_credit_payments,
+					liquid_savings,
+					collected_at
+				from member_finance_snapshots
+				where member_id = ? and period_year = ? and period_month = ?
+				""",
+			MEMBER_ID,
+			2026,
+			(short) 3
+		);
+
+		assertThat(storedSnapshotRow.get("family_id")).isEqualTo(FAMILY_ID.toString());
+		assertThat(storedSnapshotRow.get("member_id")).isEqualTo(MEMBER_ID.toString());
+		assertThat(storedSnapshotRow.get("period_year")).isEqualTo(2026);
+		assertThat(((Number) storedSnapshotRow.get("period_month")).shortValue()).isEqualTo((short) 3);
+		assertThat(storedSnapshotRow.get("source_submission_id")).isEqualTo(submissionId.toString());
+		assertThat(storedSnapshotRow.get("monthly_income")).isEqualTo(120000);
+		assertThat(storedSnapshotRow.get("monthly_expenses")).isEqualTo(50000);
+		assertThat(storedSnapshotRow.get("monthly_credit_payments")).isEqualTo(18000);
+		assertThat(storedSnapshotRow.get("liquid_savings")).isEqualTo(150000);
+		assertThat(storedSnapshotRow.get("collected_at").toString()).contains("2026-03-15 08:40:00");
 	}
 
 	@Test
@@ -163,6 +195,105 @@ class UserFinanceIntakePersistenceIntegrationTest {
 
 		assertThat(storedRow.get("request_id")).isEqualTo("req-2026-03-15-member-anna");
 		assertThat(storedRow.get("raw_request_id")).isEqualTo("req-2026-03-15-member-anna");
+	}
+
+	@Test
+	void secondPayloadForSamePeriodUpdatesExistingMemberSnapshotAndAggregatesMonthlyIncome() throws Exception {
+		mockMvc.perform(post("/api/v1/intake/user-finance-data")
+				.header("X-API-Key", API_KEY)
+				.contentType(APPLICATION_JSON)
+				.content(validPayload()))
+			.andExpect(status().isAccepted());
+
+		mockMvc.perform(post("/api/v1/intake/user-finance-data")
+				.header("X-API-Key", API_KEY)
+				.contentType(APPLICATION_JSON)
+				.content(secondPayloadForSamePeriodWithNewerCollectedAt()))
+			.andExpect(status().isAccepted());
+
+		Integer snapshotCount = jdbcTemplate.queryForObject(
+			"select count(*) from member_finance_snapshots where member_id = ? and period_year = ? and period_month = ?",
+			Integer.class,
+			MEMBER_ID,
+			2026,
+			(short) 3
+		);
+
+		Map<String, Object> storedSnapshotRow = jdbcTemplate.queryForMap(
+			"""
+				select
+					source_submission_id::text as source_submission_id,
+					monthly_income,
+					monthly_expenses,
+					monthly_credit_payments,
+					liquid_savings,
+					collected_at
+				from member_finance_snapshots
+				where member_id = ? and period_year = ? and period_month = ?
+				""",
+			MEMBER_ID,
+			2026,
+			(short) 3
+		);
+
+		assertThat(snapshotCount).isEqualTo(1);
+		assertThat(storedSnapshotRow.get("monthly_income")).isEqualTo(190000);
+		assertThat(storedSnapshotRow.get("monthly_expenses")).isEqualTo(62000);
+		assertThat(storedSnapshotRow.get("monthly_credit_payments")).isEqualTo(15000);
+		assertThat(storedSnapshotRow.get("liquid_savings")).isEqualTo(210000);
+		assertThat(storedSnapshotRow.get("collected_at").toString()).contains("2026-03-20 09:15:00");
+
+		String latestSubmissionId = jdbcTemplate.queryForObject(
+			"select id::text from finance_submissions where external_submission_id = ?",
+			String.class,
+			"n8n-run-2026-03-20-002"
+		);
+		assertThat(storedSnapshotRow.get("source_submission_id")).isEqualTo(latestSubmissionId);
+	}
+
+	@Test
+	void olderPayloadForSamePeriodDoesNotOverwriteSnapshotFieldsFromFreshestSubmission() throws Exception {
+		mockMvc.perform(post("/api/v1/intake/user-finance-data")
+				.header("X-API-Key", API_KEY)
+				.contentType(APPLICATION_JSON)
+				.content(validPayload()))
+			.andExpect(status().isAccepted());
+
+		mockMvc.perform(post("/api/v1/intake/user-finance-data")
+				.header("X-API-Key", API_KEY)
+				.contentType(APPLICATION_JSON)
+				.content(secondPayloadForSamePeriodWithOlderCollectedAt()))
+			.andExpect(status().isAccepted());
+
+		Map<String, Object> storedSnapshotRow = jdbcTemplate.queryForMap(
+			"""
+				select
+					source_submission_id::text as source_submission_id,
+					monthly_income,
+					monthly_expenses,
+					monthly_credit_payments,
+					liquid_savings,
+					collected_at
+				from member_finance_snapshots
+				where member_id = ? and period_year = ? and period_month = ?
+				""",
+			MEMBER_ID,
+			2026,
+			(short) 3
+		);
+
+		String freshestSubmissionId = jdbcTemplate.queryForObject(
+			"select id::text from finance_submissions where external_submission_id = ?",
+			String.class,
+			"n8n-run-2026-03-15-001"
+		);
+
+		assertThat(storedSnapshotRow.get("monthly_income")).isEqualTo(165000);
+		assertThat(storedSnapshotRow.get("monthly_expenses")).isEqualTo(50000);
+		assertThat(storedSnapshotRow.get("monthly_credit_payments")).isEqualTo(18000);
+		assertThat(storedSnapshotRow.get("liquid_savings")).isEqualTo(150000);
+		assertThat(storedSnapshotRow.get("source_submission_id")).isEqualTo(freshestSubmissionId);
+		assertThat(storedSnapshotRow.get("collected_at").toString()).contains("2026-03-15 08:40:00");
 	}
 
 	@Test
@@ -316,6 +447,60 @@ class UserFinanceIntakePersistenceIntegrationTest {
 			    "telegram_chat_id": "123456789",
 			    "confidence": "medium",
 			    "notes": "User provided approximate values"
+			  }
+			}
+			""";
+	}
+
+	private String secondPayloadForSamePeriodWithNewerCollectedAt() {
+		return """
+			{
+			  "external_submission_id": "n8n-run-2026-03-20-002",
+			  "family_id": "11111111-1111-1111-1111-111111111111",
+			  "member_id": "22222222-2222-2222-2222-222222222222",
+			  "source": "telegram",
+			  "collected_at": "2026-03-20T09:15:00+03:00",
+			  "period": {
+			    "year": 2026,
+			    "month": 3
+			  },
+			  "finance_input": {
+			    "monthly_income": 70000,
+			    "monthly_expenses": 62000,
+			    "monthly_credit_payments": 15000,
+			    "liquid_savings": 210000
+			  },
+			  "meta": {
+			    "telegram_chat_id": "123456789",
+			    "confidence": "high",
+			    "notes": "Updated estimate after second payroll"
+			  }
+			}
+			""";
+	}
+
+	private String secondPayloadForSamePeriodWithOlderCollectedAt() {
+		return """
+			{
+			  "external_submission_id": "n8n-run-2026-03-10-002",
+			  "family_id": "11111111-1111-1111-1111-111111111111",
+			  "member_id": "22222222-2222-2222-2222-222222222222",
+			  "source": "telegram",
+			  "collected_at": "2026-03-10T08:30:00+03:00",
+			  "period": {
+			    "year": 2026,
+			    "month": 3
+			  },
+			  "finance_input": {
+			    "monthly_income": 45000,
+			    "monthly_expenses": 47000,
+			    "monthly_credit_payments": 17000,
+			    "liquid_savings": 120000
+			  },
+			  "meta": {
+			    "telegram_chat_id": "123456789",
+			    "confidence": "medium",
+			    "notes": "Late delivery for earlier payroll event"
 			  }
 			}
 			""";

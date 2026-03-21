@@ -98,6 +98,8 @@
 
 ### Задача 01. Реализовать пересчет `member_finance_snapshots`
 
+Статус: выполнено.
+
 Что сделать:
 
 - выбрать все `finance_submissions` по `member_id + period_year + period_month`;

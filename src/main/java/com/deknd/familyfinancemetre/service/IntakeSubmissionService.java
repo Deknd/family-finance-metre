@@ -16,10 +16,11 @@ import com.deknd.familyfinancemetre.repository.FinanceSubmissionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -29,6 +30,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class IntakeSubmissionService {
 
 	private static final String DUPLICATE_SUBMISSION_CONSTRAINT = "uq_finance_submissions_external_submission_id";
@@ -37,19 +39,11 @@ public class IntakeSubmissionService {
 	private final FinanceSubmissionRepository financeSubmissionRepository;
 	private final FamilyRepository familyRepository;
 	private final FamilyMemberRepository familyMemberRepository;
-
-	public IntakeSubmissionService(
-		FinanceSubmissionRepository financeSubmissionRepository,
-		FamilyRepository familyRepository,
-		FamilyMemberRepository familyMemberRepository
-	) {
-		this.financeSubmissionRepository = financeSubmissionRepository;
-		this.familyRepository = familyRepository;
-		this.familyMemberRepository = familyMemberRepository;
-	}
+	private final MemberFinanceSnapshotRecalculationService memberFinanceSnapshotRecalculationService;
 
 	/**
-	 * Принимает валидный intake payload, сохраняет его в {@code finance_submissions}
+	 * Принимает валидный intake payload, сохраняет его в {@code finance_submissions},
+	 * сразу пересчитывает {@code member_finance_snapshots} за период payload
 	 * и защищает endpoint от повторной обработки одного и того же
 	 * {@code external_submission_id}.
 	 *
@@ -77,6 +71,12 @@ public class IntakeSubmissionService {
 			}
 			throw exception;
 		}
+
+		memberFinanceSnapshotRecalculationService.recalculateForMemberPeriod(
+			submission.getMember().getId(),
+			submission.getPeriodYear(),
+			submission.getPeriodMonth()
+		);
 
 		return new UserFinanceIntakeAcceptedResponse(
 			"accepted",

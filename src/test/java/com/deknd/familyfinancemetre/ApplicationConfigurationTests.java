@@ -3,6 +3,7 @@ package com.deknd.familyfinancemetre;
 import com.deknd.familyfinancemetre.config.ApplicationProperties;
 import com.deknd.familyfinancemetre.config.DatabaseProperties;
 import com.deknd.familyfinancemetre.service.IntakeSubmissionService;
+import com.deknd.familyfinancemetre.service.MemberFinanceSnapshotRecalculationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -22,6 +23,9 @@ class ApplicationConfigurationTests {
 
 	@MockitoBean
 	private IntakeSubmissionService intakeSubmissionService;
+
+	@MockitoBean
+	private MemberFinanceSnapshotRecalculationService memberFinanceSnapshotRecalculationService;
 
 	@Autowired
 	private DatabaseProperties databaseProperties;
