@@ -17,9 +17,11 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -68,6 +70,7 @@ class DeviceDashboardControllerIntegrationTest {
 	@DisplayName("GET /api/v1/device/dashboard возвращает готовый payload для аутентифицированного устройства")
 	void getDashboardReturnsReadyPayload() throws Exception {
 		insertDashboardSnapshot();
+		Instant requestedAt = Instant.now();
 
 		mockMvc.perform(get("/api/v1/device/dashboard").header("X-Device-Token", DEVICE_TOKEN))
 			.andExpect(status().isOk())
@@ -83,6 +86,11 @@ class DeviceDashboardControllerIntegrationTest {
 			.andExpect(jsonPath("$.metrics.emergency_fund_months").value(new BigDecimal("2.00").doubleValue()))
 			.andExpect(jsonPath("$.display.currency").value("RUB"))
 			.andExpect(jsonPath("$.display.updated_at_label").value("15.03 09:00"));
+		Instant handledAt = Instant.now();
+		OffsetDateTime actualLastSeenAt = getDeviceLastSeenAt();
+
+		assertThat(actualLastSeenAt).isNotNull();
+		assertThat(actualLastSeenAt.toInstant()).isBetween(requestedAt, handledAt);
 	}
 
 	@Test
@@ -92,6 +100,8 @@ class DeviceDashboardControllerIntegrationTest {
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.error.code").value("DASHBOARD_NOT_READY"))
 			.andExpect(jsonPath("$.error.message").value("Dashboard data is not available yet"));
+
+		assertThat(getDeviceLastSeenAt()).isNull();
 	}
 
 	private void insertFamily() {
@@ -166,6 +176,14 @@ class DeviceDashboardControllerIntegrationTest {
 			now,
 			now,
 			now
+		);
+	}
+
+	private OffsetDateTime getDeviceLastSeenAt() {
+		return jdbcTemplate.queryForObject(
+			"select last_seen_at from devices where id = ?",
+			OffsetDateTime.class,
+			DEVICE_ID
 		);
 	}
 }
