@@ -11,6 +11,8 @@
 
 Отдельный контракт запуска LLM-агента вынесен в другой документ.
 
+Подробная внутренняя схема `n8n`-агента описана в [n8n-telegram-finance-intake-agent-spec.md](/D:/IdeaProjects/family-finance-metre/docs/n8n-telegram-finance-intake-agent-spec.md).
+
 ## 2. Роли API
 
 Сервер в MVP должен решать 2 основные задачи:
@@ -233,9 +235,9 @@ Content-Type: application/json
 ```json
 {
   "external_submission_id": "n8n-run-2026-03-15-001",
-  "request_id": "req_2026_03_15_member_anna",
-  "family_id": "family_01",
-  "member_id": "member_anna",
+  "request_id": "req-2026-03-15-member-anna",
+  "family_id": "11111111-1111-1111-1111-111111111111",
+  "member_id": "22222222-2222-2222-2222-222222222222",
   "source": "telegram",
   "collected_at": "2026-03-15T08:40:00+03:00",
   "period": {
@@ -260,8 +262,8 @@ Content-Type: application/json
 
 - `external_submission_id` - уникальный id отправки со стороны `n8n`
 - `request_id` - необязательный correlation id исходного запуска опроса со стороны сервера
-- `family_id` - идентификатор семьи
-- `member_id` - идентификатор члена семьи, которого опрашивали
+- `family_id` - идентификатор семьи в формате UUID
+- `member_id` - идентификатор члена семьи, которого опрашивали, в формате UUID
 - `source` - источник данных, для MVP ожидается `telegram`
 - `collected_at` - когда опрос был завершен
 - `period.year` - год, к которому относятся данные
@@ -276,6 +278,8 @@ Content-Type: application/json
 
 Если `request_id` не передан, сервер все равно принимает payload и обрабатывает его как обычный intake без связки с конкретным `llm_collection_request`.
 
+Если `request_id` передан, но такой `llm_collection_request` отсутствует, сервер возвращает `422 Unprocessable Entity` с `VALIDATION_ERROR`.
+
 ### Семантика intake при нескольких выплатах в месяц
 
 - один payload соответствует одному payroll-событию;
@@ -289,8 +293,8 @@ Content-Type: application/json
 {
   "status": "accepted",
   "submission_id": "subm_001",
-  "family_id": "family_01",
-  "member_id": "member_anna",
+  "family_id": "11111111-1111-1111-1111-111111111111",
+  "member_id": "22222222-2222-2222-2222-222222222222",
   "recalculation_scheduled": true
 }
 ```
@@ -322,6 +326,29 @@ Content-Type: application/json
     {
       "field": "finance_input.monthly_income",
       "message": "Must be greater than or equal to 0"
+    }
+  ]
+}
+```
+
+Также этот ответ используется, если:
+
+- `family_id` не существует;
+- `member_id` не существует;
+- `request_id` передан, но соответствующий `llm_collection_request` не найден.
+
+Пример для несуществующего `request_id`:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed"
+  },
+  "details": [
+    {
+      "field": "request_id",
+      "message": "llm collection request does not exist"
     }
   ]
 }
