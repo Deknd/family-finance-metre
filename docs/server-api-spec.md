@@ -95,13 +95,16 @@ X-Device-Token: <device-token>
 
 Если устройство жестко привязано к одной семье, `device_id` можно получать из токена.
 
+В текущей серверной реализации `device_id` и `family_id`
+передаются строками с UUID-значениями.
+
 ### Ответ `200 OK`
 
 ```json
 {
   "generated_at": "2026-03-15T09:00:00+03:00",
-  "device_id": "dev_01",
-  "family_id": "family_01",
+  "device_id": "44444444-4444-4444-4444-444444444444",
+  "family_id": "11111111-1111-1111-1111-111111111111",
   "status": "warning",
   "status_text": "Внимание",
   "status_reason": "Подушка ниже комфортной зоны",
@@ -120,7 +123,8 @@ X-Device-Token: <device-token>
 
 ### Поля ответа
 
-- `generated_at` - время генерации ответа сервером
+- `generated_at` - время расчета актуального dashboard snapshot-а
+  (`family_dashboard_snapshots.calculated_at`) в таймзоне семьи
 - `device_id` - идентификатор устройства
 - `family_id` - идентификатор семьи
 - `status` - машинное значение статуса: `normal`, `warning`, `risk`
@@ -131,7 +135,13 @@ X-Device-Token: <device-token>
 - `metrics.credit_load_percent` - кредитная нагрузка в процентах
 - `metrics.emergency_fund_months` - подушка в месяцах
 - `display.currency` - валюта отображения
-- `display.updated_at_label` - готовая строка для рендера на экране
+- `display.updated_at_label` - готовая строка для рендера на экране,
+  сформированная из `generated_at` в таймзоне семьи
+
+### Правило выбора данных
+
+Сервер отдает snapshot за последний доступный расчетный период семьи,
+то есть по максимальным `period_year` и `period_month`.
 
 ### MVP policy статуса
 

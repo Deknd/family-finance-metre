@@ -378,6 +378,8 @@ MVP policy расчета статуса:
 
 - при `monthly_expenses = 0` правило по подушке не применяется,
   потому что `emergency_fund_months = 0.00` в этой ветке является техническим значением;
+- `calculated_at` является источником времени свежести для device read-модели:
+  из него формируется `generated_at` и строка `display.updated_at_label`;
 - в MVP policy и `status_reason` вычисляются локально на сервере;
 - позже источник правил можно вынести в `n8n` или LLM-агент через отдельный адаптер,
   не меняя структуру `family_dashboard_snapshots` и публичный API.
@@ -417,7 +419,12 @@ MVP policy расчета статуса:
 1. Устройство вызывает `GET /api/v1/device/dashboard`.
 2. Сервер находит устройство по токену.
 3. Сервер находит семью устройства.
-4. Сервер отдает последний актуальный `family_dashboard_snapshots`.
+4. Сервер отдает `family_dashboard_snapshots`
+   за последний доступный расчетный период семьи
+   по максимальным `period_year` и `period_month`.
+5. Сервер использует `calculated_at` выбранного snapshot
+   как источник времени для `generated_at`
+   и для строки `display.updated_at_label`.
 
 ## 9. Индексы, которые важны в MVP
 

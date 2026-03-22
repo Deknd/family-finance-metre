@@ -28,6 +28,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -339,6 +340,52 @@ class JpaPersistenceIntegrationTest {
 			String.class,
 			dashboardSnapshot.getId()
 		)).isEqualTo("warning");
+	}
+
+	@Test
+	@DisplayName("Возвращает snapshot за последний расчетный период, даже если более старый период пересчитан позже")
+	void findsLatestDashboardSnapshotByPeriod() {
+		FamilyEntity family = saveFamily();
+
+		FamilyDashboardSnapshotEntity marchSnapshot = new FamilyDashboardSnapshotEntity();
+		marchSnapshot.setFamily(family);
+		marchSnapshot.setPeriodYear(2026);
+		marchSnapshot.setPeriodMonth((short) 3);
+		marchSnapshot.setStatus(DashboardStatus.NORMAL);
+		marchSnapshot.setStatusText("Норма");
+		marchSnapshot.setStatusReason("Показатели в пределах нормы");
+		marchSnapshot.setMonthlyIncome(210000);
+		marchSnapshot.setMonthlyExpenses(90000);
+		marchSnapshot.setCreditLoadPercent(new BigDecimal("27.00"));
+		marchSnapshot.setEmergencyFundMonths(new BigDecimal("3.20"));
+		marchSnapshot.setMemberCountUsed(2);
+		marchSnapshot.setCalculatedAt(atMoscow("2026-03-20T09:00:00"));
+		familyDashboardSnapshotRepository.saveAndFlush(marchSnapshot);
+
+		FamilyDashboardSnapshotEntity februarySnapshot = new FamilyDashboardSnapshotEntity();
+		februarySnapshot.setFamily(family);
+		februarySnapshot.setPeriodYear(2026);
+		februarySnapshot.setPeriodMonth((short) 2);
+		februarySnapshot.setStatus(DashboardStatus.WARNING);
+		februarySnapshot.setStatusText("Внимание");
+		februarySnapshot.setStatusReason("Подушка ниже комфортной зоны");
+		februarySnapshot.setMonthlyIncome(180000);
+		februarySnapshot.setMonthlyExpenses(95000);
+		februarySnapshot.setCreditLoadPercent(new BigDecimal("31.00"));
+		februarySnapshot.setEmergencyFundMonths(new BigDecimal("2.30"));
+		februarySnapshot.setMemberCountUsed(2);
+		februarySnapshot.setCalculatedAt(atMoscow("2026-03-21T09:00:00"));
+		familyDashboardSnapshotRepository.saveAndFlush(februarySnapshot);
+
+		entityManager.clear();
+
+		FamilyDashboardSnapshotEntity actualSnapshot = familyDashboardSnapshotRepository
+			.findFirstByFamilyIdOrderByPeriodYearDescPeriodMonthDesc(family.getId())
+			.orElseThrow();
+
+		assertThat(actualSnapshot.getPeriodYear()).isEqualTo(2026);
+		assertThat(actualSnapshot.getPeriodMonth()).isEqualTo((short) 3);
+		assertThat(actualSnapshot.getCalculatedAt()).isEqualTo(atMoscow("2026-03-20T09:00:00"));
 	}
 
 	private FamilyEntity saveFamily() {
