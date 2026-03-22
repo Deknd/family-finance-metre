@@ -5,7 +5,6 @@ import com.deknd.familyfinancemetre.entity.FamilyEntity;
 import com.deknd.familyfinancemetre.entity.FamilyMemberEntity;
 import com.deknd.familyfinancemetre.entity.FinanceSubmissionEntity;
 import com.deknd.familyfinancemetre.entity.MemberFinanceSnapshotEntity;
-import com.deknd.familyfinancemetre.entity.enums.DashboardStatus;
 import com.deknd.familyfinancemetre.repository.FamilyDashboardSnapshotRepository;
 import com.deknd.familyfinancemetre.repository.MemberFinanceSnapshotRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +25,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
@@ -47,6 +47,9 @@ class FamilyDashboardSnapshotRecalculationServiceTest {
 	@Mock
 	private FamilyDashboardSnapshotRepository familyDashboardSnapshotRepository;
 
+	@Mock
+	private FamilyDashboardStatusPolicy familyDashboardStatusPolicy;
+
 	private FamilyDashboardSnapshotRecalculationService familyDashboardSnapshotRecalculationService;
 
 	@BeforeEach
@@ -54,6 +57,7 @@ class FamilyDashboardSnapshotRecalculationServiceTest {
 		familyDashboardSnapshotRecalculationService = new FamilyDashboardSnapshotRecalculationService(
 			memberFinanceSnapshotRepository,
 			familyDashboardSnapshotRepository,
+			familyDashboardStatusPolicy,
 			FIXED_CLOCK
 		);
 	}
@@ -62,6 +66,7 @@ class FamilyDashboardSnapshotRecalculationServiceTest {
 	@DisplayName("Создает семейный snapshot из одного персонального snapshot")
 	void recalculateForFamilyPeriodCreatesDashboardSnapshotFromSingleMemberSnapshot() {
 		MemberFinanceSnapshotEntity memberSnapshot = memberSnapshot(FIRST_MEMBER_ID, 120000, 50000, 18000, 150000);
+		stubNormalStatusDecision();
 
 		given(memberFinanceSnapshotRepository.findAllByFamilyIdAndPeriodYearAndPeriodMonth(FAMILY_ID, 2026, (short) 3))
 			.willReturn(List.of(memberSnapshot));
@@ -79,9 +84,9 @@ class FamilyDashboardSnapshotRecalculationServiceTest {
 		assertThat(savedSnapshot.getFamily().getId()).isEqualTo(FAMILY_ID);
 		assertThat(savedSnapshot.getPeriodYear()).isEqualTo(2026);
 		assertThat(savedSnapshot.getPeriodMonth()).isEqualTo((short) 3);
-		assertThat(savedSnapshot.getStatus()).isEqualTo(DashboardStatus.NORMAL);
+		assertThat(savedSnapshot.getStatus().getDatabaseValue()).isEqualTo("normal");
 		assertThat(savedSnapshot.getStatusText()).isEqualTo("Норма");
-		assertThat(savedSnapshot.getStatusReason()).isEqualTo("Policy статуса будет определен отдельно");
+		assertThat(savedSnapshot.getStatusReason()).isEqualTo("Показатели в пределах нормы");
 		assertThat(savedSnapshot.getMonthlyIncome()).isEqualTo(120000);
 		assertThat(savedSnapshot.getMonthlyExpenses()).isEqualTo(50000);
 		assertThat(savedSnapshot.getCreditLoadPercent()).isEqualByComparingTo("15.00");
@@ -91,10 +96,37 @@ class FamilyDashboardSnapshotRecalculationServiceTest {
 	}
 
 	@Test
+	@DisplayName("Передает рассчитанные метрики в policy перед сохранением snapshot")
+	void recalculateForFamilyPeriodPassesCalculatedMetricsToPolicy() {
+		MemberFinanceSnapshotEntity firstSnapshot = memberSnapshot(FIRST_MEMBER_ID, 120000, 50000, 12000, 150000);
+		MemberFinanceSnapshotEntity secondSnapshot = memberSnapshot(SECOND_MEMBER_ID, 80000, 40000, 8000, 50000);
+		stubNormalStatusDecision();
+
+		given(memberFinanceSnapshotRepository.findAllByFamilyIdAndPeriodYearAndPeriodMonth(FAMILY_ID, 2026, (short) 3))
+			.willReturn(List.of(firstSnapshot, secondSnapshot));
+		given(familyDashboardSnapshotRepository.findByFamilyIdAndPeriodYearAndPeriodMonth(FAMILY_ID, 2026, (short) 3))
+			.willReturn(Optional.empty());
+
+		familyDashboardSnapshotRecalculationService.recalculateForFamilyPeriod(FAMILY_ID, 2026, (short) 3);
+
+		ArgumentCaptor<FamilyDashboardStatusPolicyContext> contextCaptor =
+			ArgumentCaptor.forClass(FamilyDashboardStatusPolicyContext.class);
+		verify(familyDashboardStatusPolicy).evaluate(contextCaptor.capture());
+
+		FamilyDashboardStatusPolicyContext context = contextCaptor.getValue();
+		assertThat(context.getMonthlyIncome()).isEqualTo(200000);
+		assertThat(context.getMonthlyExpenses()).isEqualTo(90000);
+		assertThat(context.getCreditLoadPercent()).isEqualByComparingTo("10.00");
+		assertThat(context.getEmergencyFundMonths()).isEqualByComparingTo("2.22");
+		assertThat(context.getMemberCountUsed()).isEqualTo(2);
+	}
+
+	@Test
 	@DisplayName("Суммирует значения всех членов семьи за период")
 	void recalculateForFamilyPeriodSumsAllFamilyMemberSnapshots() {
 		MemberFinanceSnapshotEntity firstSnapshot = memberSnapshot(FIRST_MEMBER_ID, 120000, 50000, 12000, 150000);
 		MemberFinanceSnapshotEntity secondSnapshot = memberSnapshot(SECOND_MEMBER_ID, 80000, 40000, 8000, 50000);
+		stubNormalStatusDecision();
 
 		given(memberFinanceSnapshotRepository.findAllByFamilyIdAndPeriodYearAndPeriodMonth(FAMILY_ID, 2026, (short) 3))
 			.willReturn(List.of(firstSnapshot, secondSnapshot));
@@ -119,6 +151,7 @@ class FamilyDashboardSnapshotRecalculationServiceTest {
 	@DisplayName("Округляет кредитную нагрузку по правилу HALF_UP")
 	void recalculateForFamilyPeriodCalculatesCreditLoadPercentWithHalfUpRounding() {
 		MemberFinanceSnapshotEntity memberSnapshot = memberSnapshot(FIRST_MEMBER_ID, 30000, 10000, 5000, 100000);
+		stubNormalStatusDecision();
 
 		given(memberFinanceSnapshotRepository.findAllByFamilyIdAndPeriodYearAndPeriodMonth(FAMILY_ID, 2026, (short) 3))
 			.willReturn(List.of(memberSnapshot));
@@ -138,6 +171,7 @@ class FamilyDashboardSnapshotRecalculationServiceTest {
 	@DisplayName("При нулевом доходе и наличии кредитов сохраняет кредитную нагрузку 100 процентов")
 	void recalculateForFamilyPeriodReturnsHundredPercentCreditLoadWhenIncomeIsZeroAndCreditsExist() {
 		MemberFinanceSnapshotEntity memberSnapshot = memberSnapshot(FIRST_MEMBER_ID, 0, 10000, 5000, 25000);
+		stubNormalStatusDecision();
 
 		given(memberFinanceSnapshotRepository.findAllByFamilyIdAndPeriodYearAndPeriodMonth(FAMILY_ID, 2026, (short) 3))
 			.willReturn(List.of(memberSnapshot));
@@ -157,6 +191,7 @@ class FamilyDashboardSnapshotRecalculationServiceTest {
 	@DisplayName("При нулевом доходе и отсутствии кредитов сохраняет нулевую кредитную нагрузку")
 	void recalculateForFamilyPeriodReturnsZeroCreditLoadWhenIncomeAndCreditsAreZero() {
 		MemberFinanceSnapshotEntity memberSnapshot = memberSnapshot(FIRST_MEMBER_ID, 0, 10000, 0, 25000);
+		stubNormalStatusDecision();
 
 		given(memberFinanceSnapshotRepository.findAllByFamilyIdAndPeriodYearAndPeriodMonth(FAMILY_ID, 2026, (short) 3))
 			.willReturn(List.of(memberSnapshot));
@@ -176,6 +211,7 @@ class FamilyDashboardSnapshotRecalculationServiceTest {
 	@DisplayName("При нулевых расходах сохраняет нулевое значение подушки")
 	void recalculateForFamilyPeriodReturnsZeroEmergencyFundMonthsWhenExpensesAreZero() {
 		MemberFinanceSnapshotEntity memberSnapshot = memberSnapshot(FIRST_MEMBER_ID, 70000, 0, 5000, 25000);
+		stubNormalStatusDecision();
 
 		given(memberFinanceSnapshotRepository.findAllByFamilyIdAndPeriodYearAndPeriodMonth(FAMILY_ID, 2026, (short) 3))
 			.willReturn(List.of(memberSnapshot));
@@ -196,6 +232,7 @@ class FamilyDashboardSnapshotRecalculationServiceTest {
 	void recalculateForFamilyPeriodUpdatesExistingDashboardSnapshot() {
 		MemberFinanceSnapshotEntity memberSnapshot = memberSnapshot(FIRST_MEMBER_ID, 90000, 40000, 10000, 80000);
 		FamilyDashboardSnapshotEntity existingSnapshot = new FamilyDashboardSnapshotEntity();
+		stubNormalStatusDecision();
 		existingSnapshot.setId(DASHBOARD_SNAPSHOT_ID);
 		existingSnapshot.setPeriodYear(2026);
 		existingSnapshot.setPeriodMonth((short) 3);
@@ -261,5 +298,14 @@ class FamilyDashboardSnapshotRecalculationServiceTest {
 		snapshot.setLiquidSavings(liquidSavings);
 		snapshot.setCollectedAt(OffsetDateTime.parse("2026-03-20T09:15:00+03:00"));
 		return snapshot;
+	}
+
+	private void stubNormalStatusDecision() {
+		given(familyDashboardStatusPolicy.evaluate(any()))
+			.willReturn(new FamilyDashboardStatusDecision(
+				com.deknd.familyfinancemetre.entity.enums.DashboardStatus.NORMAL,
+				"Норма",
+				"Показатели в пределах нормы"
+			));
 	}
 }

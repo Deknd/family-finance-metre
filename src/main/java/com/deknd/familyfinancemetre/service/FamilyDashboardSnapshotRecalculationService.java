@@ -2,7 +2,6 @@ package com.deknd.familyfinancemetre.service;
 
 import com.deknd.familyfinancemetre.entity.FamilyDashboardSnapshotEntity;
 import com.deknd.familyfinancemetre.entity.MemberFinanceSnapshotEntity;
-import com.deknd.familyfinancemetre.entity.enums.DashboardStatus;
 import com.deknd.familyfinancemetre.repository.FamilyDashboardSnapshotRepository;
 import com.deknd.familyfinancemetre.repository.MemberFinanceSnapshotRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,11 +21,10 @@ public class FamilyDashboardSnapshotRecalculationService {
 
 	private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
 	private static final BigDecimal ZERO = new BigDecimal("0.00");
-	private static final String STATUS_TEXT_PLACEHOLDER = "Норма";
-	private static final String STATUS_REASON_PLACEHOLDER = "Policy статуса будет определен отдельно";
 
 	private final MemberFinanceSnapshotRepository memberFinanceSnapshotRepository;
 	private final FamilyDashboardSnapshotRepository familyDashboardSnapshotRepository;
+	private final FamilyDashboardStatusPolicy familyDashboardStatusPolicy;
 	private final Clock clock;
 
 	/**
@@ -53,6 +51,17 @@ public class FamilyDashboardSnapshotRecalculationService {
 		int totalMonthlyExpenses = sumBy(memberSnapshots, MemberFinanceSnapshotEntity::getMonthlyExpenses);
 		int totalMonthlyCreditPayments = sumBy(memberSnapshots, MemberFinanceSnapshotEntity::getMonthlyCreditPayments);
 		int totalLiquidSavings = sumBy(memberSnapshots, MemberFinanceSnapshotEntity::getLiquidSavings);
+		BigDecimal creditLoadPercent = calculateCreditLoadPercent(totalMonthlyIncome, totalMonthlyCreditPayments);
+		BigDecimal emergencyFundMonths = calculateEmergencyFundMonths(totalMonthlyExpenses, totalLiquidSavings);
+		FamilyDashboardStatusDecision statusDecision = familyDashboardStatusPolicy.evaluate(
+			new FamilyDashboardStatusPolicyContext(
+				totalMonthlyIncome,
+				totalMonthlyExpenses,
+				creditLoadPercent,
+				emergencyFundMonths,
+				memberSnapshots.size()
+			)
+		);
 
 		FamilyDashboardSnapshotEntity snapshot = familyDashboardSnapshotRepository
 			.findByFamilyIdAndPeriodYearAndPeriodMonth(familyId, periodYear, periodMonth)
@@ -61,13 +70,13 @@ public class FamilyDashboardSnapshotRecalculationService {
 		snapshot.setFamily(firstSnapshot.getFamily());
 		snapshot.setPeriodYear(periodYear);
 		snapshot.setPeriodMonth(periodMonth);
-		snapshot.setStatus(DashboardStatus.NORMAL);
-		snapshot.setStatusText(STATUS_TEXT_PLACEHOLDER);
-		snapshot.setStatusReason(STATUS_REASON_PLACEHOLDER);
+		snapshot.setStatus(statusDecision.getStatus());
+		snapshot.setStatusText(statusDecision.getStatusText());
+		snapshot.setStatusReason(statusDecision.getStatusReason());
 		snapshot.setMonthlyIncome(totalMonthlyIncome);
 		snapshot.setMonthlyExpenses(totalMonthlyExpenses);
-		snapshot.setCreditLoadPercent(calculateCreditLoadPercent(totalMonthlyIncome, totalMonthlyCreditPayments));
-		snapshot.setEmergencyFundMonths(calculateEmergencyFundMonths(totalMonthlyExpenses, totalLiquidSavings));
+		snapshot.setCreditLoadPercent(creditLoadPercent);
+		snapshot.setEmergencyFundMonths(emergencyFundMonths);
 		snapshot.setMemberCountUsed(memberSnapshots.size());
 		snapshot.setCalculatedAt(OffsetDateTime.now(clock));
 

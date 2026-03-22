@@ -108,8 +108,8 @@ X-Device-Token: <device-token>
   "metrics": {
     "monthly_income": 210000,
     "monthly_expenses": 90000,
-    "credit_load_percent": 27,
-    "emergency_fund_months": 4.2
+    "credit_load_percent": 27.0,
+    "emergency_fund_months": 2.0
   },
   "display": {
     "currency": "RUB",
@@ -132,6 +132,34 @@ X-Device-Token: <device-token>
 - `metrics.emergency_fund_months` - подушка в месяцах
 - `display.currency` - валюта отображения
 - `display.updated_at_label` - готовая строка для рендера на экране
+
+### MVP policy статуса
+
+Для MVP сервер определяет статус локально и детерминированно:
+
+- `status_text`: `normal -> Норма`, `warning -> Внимание`, `risk -> Риск`
+- `risk`, если `credit_load_percent >= 50.00`
+- `risk`, если `monthly_expenses > 0` и `emergency_fund_months < 1.00`
+- `warning`, если `credit_load_percent >= 30.00`, но не сработал `risk`
+- `warning`, если `monthly_expenses > 0` и `emergency_fund_months < 3.00`, но не сработал `risk`
+- иначе `normal`
+- при нескольких одновременно сработавших правилах `status_reason`
+  выбирается по самому тяжелому фактору;
+  при одинаковой тяжести сначала подушка, потом кредитная нагрузка
+
+Каталог причин для `status_reason`:
+
+- `normal` -> `Показатели в пределах нормы`
+- `warning` по подушке -> `Подушка ниже комфортной зоны`
+- `warning` по кредитной нагрузке -> `Кредитная нагрузка выше комфортной`
+- `risk` по подушке -> `Подушка меньше одного месяца`
+- `risk` по кредитной нагрузке -> `Кредитная нагрузка в зоне риска`
+
+Примечание на будущее:
+
+- в MVP эти правила и комментарии вычисляются на сервере;
+- позже источник policy и текста причины можно вынести в `n8n` или LLM-агент,
+  но поля `status`, `status_text` и `status_reason` в API должны сохраниться.
 
 ### Ответ `404 Not Found`
 
