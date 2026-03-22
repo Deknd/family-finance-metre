@@ -40,6 +40,7 @@ public class IntakeSubmissionService {
 	private final FamilyRepository familyRepository;
 	private final FamilyMemberRepository familyMemberRepository;
 	private final MemberFinanceSnapshotRecalculationService memberFinanceSnapshotRecalculationService;
+	private final FamilyDashboardSnapshotRecalculationService familyDashboardSnapshotRecalculationService;
 
 	/**
 	 * Принимает валидный intake payload, сохраняет его в {@code finance_submissions},
@@ -74,6 +75,11 @@ public class IntakeSubmissionService {
 
 		memberFinanceSnapshotRecalculationService.recalculateForMemberPeriod(
 			submission.getMember().getId(),
+			submission.getPeriodYear(),
+			submission.getPeriodMonth()
+		);
+		familyDashboardSnapshotRecalculationService.recalculateForFamilyPeriod(
+			submission.getFamily().getId(),
 			submission.getPeriodYear(),
 			submission.getPeriodMonth()
 		);

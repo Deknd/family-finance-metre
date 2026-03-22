@@ -2,6 +2,7 @@ package com.deknd.familyfinancemetre;
 
 import com.deknd.familyfinancemetre.config.ApplicationProperties;
 import com.deknd.familyfinancemetre.config.DatabaseProperties;
+import com.deknd.familyfinancemetre.service.FamilyDashboardSnapshotRecalculationService;
 import com.deknd.familyfinancemetre.service.IntakeSubmissionService;
 import com.deknd.familyfinancemetre.service.MemberFinanceSnapshotRecalculationService;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,9 @@ class ApplicationConfigurationTests {
 
 	@MockitoBean
 	private MemberFinanceSnapshotRecalculationService memberFinanceSnapshotRecalculationService;
+
+	@MockitoBean
+	private FamilyDashboardSnapshotRecalculationService familyDashboardSnapshotRecalculationService;
 
 	@Autowired
 	private DatabaseProperties databaseProperties;

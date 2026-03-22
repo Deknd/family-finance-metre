@@ -3,6 +3,7 @@ package com.deknd.familyfinancemetre.repository;
 import com.deknd.familyfinancemetre.entity.MemberFinanceSnapshotEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -18,6 +19,20 @@ public interface MemberFinanceSnapshotRepository extends JpaRepository<MemberFin
 	 */
 	Optional<MemberFinanceSnapshotEntity> findByMemberIdAndPeriodYearAndPeriodMonth(
 		UUID memberId,
+		Integer periodYear,
+		Short periodMonth
+	);
+
+	/**
+	 * Возвращает все месячные snapshot-ы членов семьи за указанный период.
+	 *
+	 * @param familyId идентификатор семьи
+	 * @param periodYear год расчетного периода
+	 * @param periodMonth месяц расчетного периода
+	 * @return список snapshot-ов семьи за период
+	 */
+	List<MemberFinanceSnapshotEntity> findAllByFamilyIdAndPeriodYearAndPeriodMonth(
+		UUID familyId,
 		Integer periodYear,
 		Short periodMonth
 	);
