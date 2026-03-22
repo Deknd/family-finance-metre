@@ -1,6 +1,7 @@
 package com.deknd.familyfinancemetre.repository;
 
 import com.deknd.familyfinancemetre.entity.FamilyDashboardSnapshotEntity;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
@@ -21,4 +22,13 @@ public interface FamilyDashboardSnapshotRepository extends JpaRepository<FamilyD
 		Integer periodYear,
 		Short periodMonth
 	);
+
+	/**
+	 * Ищет актуальный семейный dashboard snapshot за последний доступный расчетный период.
+	 *
+	 * @param familyId идентификатор семьи
+	 * @return найденный актуальный snapshot или пустой результат, если для семьи еще нет расчетных данных
+	 */
+	@EntityGraph(attributePaths = "family")
+	Optional<FamilyDashboardSnapshotEntity> findFirstByFamilyIdOrderByPeriodYearDescPeriodMonthDesc(UUID familyId);
 }
