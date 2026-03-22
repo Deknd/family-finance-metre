@@ -61,7 +61,9 @@ class UserFinanceIntakePersistenceIntegrationTest {
 
 	@BeforeEach
 	void setUp() {
-		jdbcTemplate.execute("truncate table member_finance_snapshots, finance_submissions, family_members, families restart identity cascade");
+		jdbcTemplate.execute(
+			"truncate table family_dashboard_snapshots, member_finance_snapshots, finance_submissions, family_members, families restart identity cascade"
+		);
 		insertFamily();
 		insertMember();
 	}
@@ -141,6 +143,42 @@ class UserFinanceIntakePersistenceIntegrationTest {
 		assertThat(storedSnapshotRow.get("monthly_credit_payments")).isEqualTo(18000);
 		assertThat(storedSnapshotRow.get("liquid_savings")).isEqualTo(150000);
 		assertThat(storedSnapshotRow.get("collected_at").toString()).contains("2026-03-15 08:40:00");
+
+		Map<String, Object> storedDashboardRow = jdbcTemplate.queryForMap(
+			"""
+				select
+					family_id::text as family_id,
+					period_year,
+					period_month,
+					status,
+					status_text,
+					status_reason,
+					monthly_income,
+					monthly_expenses,
+					credit_load_percent,
+					emergency_fund_months,
+					member_count_used,
+					calculated_at
+				from family_dashboard_snapshots
+				where family_id = ? and period_year = ? and period_month = ?
+				""",
+			FAMILY_ID,
+			2026,
+			(short) 3
+		);
+
+		assertThat(storedDashboardRow.get("family_id")).isEqualTo(FAMILY_ID.toString());
+		assertThat(storedDashboardRow.get("period_year")).isEqualTo(2026);
+		assertThat(((Number) storedDashboardRow.get("period_month")).shortValue()).isEqualTo((short) 3);
+		assertThat(storedDashboardRow.get("status")).isEqualTo("normal");
+		assertThat(storedDashboardRow.get("status_text")).isEqualTo("Норма");
+		assertThat(storedDashboardRow.get("status_reason")).isEqualTo("Policy статуса будет определен отдельно");
+		assertThat(storedDashboardRow.get("monthly_income")).isEqualTo(120000);
+		assertThat(storedDashboardRow.get("monthly_expenses")).isEqualTo(50000);
+		assertThat((java.math.BigDecimal) storedDashboardRow.get("credit_load_percent")).isEqualByComparingTo("15.00");
+		assertThat((java.math.BigDecimal) storedDashboardRow.get("emergency_fund_months")).isEqualByComparingTo("3.00");
+		assertThat(storedDashboardRow.get("member_count_used")).isEqualTo(1);
+		assertThat(storedDashboardRow.get("calculated_at")).isNotNull();
 	}
 
 	@Test
@@ -249,6 +287,36 @@ class UserFinanceIntakePersistenceIntegrationTest {
 			"n8n-run-2026-03-20-002"
 		);
 		assertThat(storedSnapshotRow.get("source_submission_id")).isEqualTo(latestSubmissionId);
+
+		Integer dashboardCount = jdbcTemplate.queryForObject(
+			"select count(*) from family_dashboard_snapshots where family_id = ? and period_year = ? and period_month = ?",
+			Integer.class,
+			FAMILY_ID,
+			2026,
+			(short) 3
+		);
+		Map<String, Object> storedDashboardRow = jdbcTemplate.queryForMap(
+			"""
+				select
+					monthly_income,
+					monthly_expenses,
+					credit_load_percent,
+					emergency_fund_months,
+					member_count_used
+				from family_dashboard_snapshots
+				where family_id = ? and period_year = ? and period_month = ?
+				""",
+			FAMILY_ID,
+			2026,
+			(short) 3
+		);
+
+		assertThat(dashboardCount).isEqualTo(1);
+		assertThat(storedDashboardRow.get("monthly_income")).isEqualTo(190000);
+		assertThat(storedDashboardRow.get("monthly_expenses")).isEqualTo(62000);
+		assertThat((java.math.BigDecimal) storedDashboardRow.get("credit_load_percent")).isEqualByComparingTo("7.89");
+		assertThat((java.math.BigDecimal) storedDashboardRow.get("emergency_fund_months")).isEqualByComparingTo("3.39");
+		assertThat(storedDashboardRow.get("member_count_used")).isEqualTo(1);
 	}
 
 	@Test

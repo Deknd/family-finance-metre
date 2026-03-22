@@ -14,6 +14,7 @@ import com.deknd.familyfinancemetre.repository.FamilyMemberRepository;
 import com.deknd.familyfinancemetre.repository.FamilyRepository;
 import com.deknd.familyfinancemetre.repository.FinanceSubmissionRepository;
 import org.hibernate.exception.ConstraintViolationException;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -56,10 +57,14 @@ class IntakeSubmissionServiceTest {
 	@Mock
 	private MemberFinanceSnapshotRecalculationService memberFinanceSnapshotRecalculationService;
 
+	@Mock
+	private FamilyDashboardSnapshotRecalculationService familyDashboardSnapshotRecalculationService;
+
 	@InjectMocks
 	private IntakeSubmissionService intakeSubmissionService;
 
 	@Test
+	@DisplayName("После сохранения intake пересчитывает персональный и семейный snapshot")
 	void acceptSavesSubmissionAndReturnsStoredId() {
 		UserFinanceIntakeRequest request = validRequest();
 		FamilyEntity family = family(FAMILY_ID);
@@ -99,6 +104,8 @@ class IntakeSubmissionServiceTest {
 		assertThat(savedSubmission.getLlmCollectionRequest()).isNull();
 		verify(memberFinanceSnapshotRecalculationService)
 			.recalculateForMemberPeriod(MEMBER_ID, 2026, (short) 3);
+		verify(familyDashboardSnapshotRecalculationService)
+			.recalculateForFamilyPeriod(FAMILY_ID, 2026, (short) 3);
 
 		assertThat(response.status()).isEqualTo("accepted");
 		assertThat(response.submissionId()).isEqualTo(SUBMISSION_ID.toString());
@@ -213,6 +220,7 @@ class IntakeSubmissionServiceTest {
 	}
 
 	@Test
+	@DisplayName("Повторно вызывает пересчет семьи для периода сохраненного submission")
 	void acceptTriggersMemberSnapshotRecalculationForSavedSubmissionPeriod() {
 		UserFinanceIntakeRequest request = validRequest();
 		FamilyEntity family = family(FAMILY_ID);
@@ -231,6 +239,8 @@ class IntakeSubmissionServiceTest {
 
 		verify(memberFinanceSnapshotRecalculationService)
 			.recalculateForMemberPeriod(MEMBER_ID, 2026, (short) 3);
+		verify(familyDashboardSnapshotRecalculationService)
+			.recalculateForFamilyPeriod(FAMILY_ID, 2026, (short) 3);
 	}
 
 	@Test
