@@ -16,6 +16,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
@@ -62,7 +63,8 @@ class UserFinanceIntakePersistenceIntegrationTest {
 	@BeforeEach
 	void setUp() {
 		jdbcTemplate.execute(
-			"truncate table family_dashboard_snapshots, member_finance_snapshots, finance_submissions, family_members, families restart identity cascade"
+			"truncate table family_dashboard_snapshots, member_finance_snapshots, finance_submissions, llm_collection_requests, "
+				+ "member_payroll_schedules, family_members, families restart identity cascade"
 		);
 		insertFamily();
 		insertMember();
@@ -208,6 +210,9 @@ class UserFinanceIntakePersistenceIntegrationTest {
 
 	@Test
 	void payloadWithRequestIdPersistsCorrelationId() throws Exception {
+		UUID payrollScheduleId = insertPayrollSchedule();
+		UUID llmCollectionRequestId = insertLlmCollectionRequest(payrollScheduleId, "req-2026-03-15-member-anna");
+
 		String responseBody = mockMvc.perform(post("/api/v1/intake/user-finance-data")
 				.header("X-API-Key", API_KEY)
 				.contentType(APPLICATION_JSON)
@@ -224,6 +229,7 @@ class UserFinanceIntakePersistenceIntegrationTest {
 			"""
 				select
 					request_id,
+					llm_collection_request_id::text as llm_collection_request_id,
 					raw_payload ->> 'request_id' as raw_request_id
 				from finance_submissions
 				where id = ?
@@ -232,7 +238,42 @@ class UserFinanceIntakePersistenceIntegrationTest {
 		);
 
 		assertThat(storedRow.get("request_id")).isEqualTo("req-2026-03-15-member-anna");
+		assertThat(storedRow.get("llm_collection_request_id")).isEqualTo(llmCollectionRequestId.toString());
 		assertThat(storedRow.get("raw_request_id")).isEqualTo("req-2026-03-15-member-anna");
+
+		Map<String, Object> llmRequestRow = jdbcTemplate.queryForMap(
+			"""
+				select
+					status,
+					completed_at
+				from llm_collection_requests
+				where id = ?
+				""",
+			llmCollectionRequestId
+		);
+
+		assertThat(llmRequestRow.get("status")).isEqualTo("completed");
+		assertThat(llmRequestRow.get("completed_at")).isNotNull();
+	}
+
+	@Test
+	void unknownRequestIdReturnsValidationErrorAndDoesNotPersistAnything() throws Exception {
+		mockMvc.perform(post("/api/v1/intake/user-finance-data")
+				.header("X-API-Key", API_KEY)
+				.contentType(APPLICATION_JSON)
+				.content(validPayloadWithRequestId()))
+			.andExpect(status().isUnprocessableEntity())
+			.andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"))
+			.andExpect(jsonPath("$.details[0].field").value("request_id"))
+			.andExpect(jsonPath("$.details[0].message").value("llm collection request does not exist"));
+
+		Integer submissionsCount = jdbcTemplate.queryForObject("select count(*) from finance_submissions", Integer.class);
+		Integer memberSnapshotCount = jdbcTemplate.queryForObject("select count(*) from member_finance_snapshots", Integer.class);
+		Integer dashboardSnapshotCount = jdbcTemplate.queryForObject("select count(*) from family_dashboard_snapshots", Integer.class);
+
+		assertThat(submissionsCount).isZero();
+		assertThat(memberSnapshotCount).isZero();
+		assertThat(dashboardSnapshotCount).isZero();
 	}
 
 	@Test
@@ -426,6 +467,84 @@ class UserFinanceIntakePersistenceIntegrationTest {
 
 	private void insertMember() {
 		insertMember(MEMBER_ID, FAMILY_ID, "Anna", "Ivanova", "anna_ivanova");
+	}
+
+	private UUID insertPayrollSchedule() {
+		UUID payrollScheduleId = UUID.fromString("66666666-6666-6666-6666-666666666666");
+		OffsetDateTime now = OffsetDateTime.parse("2026-03-15T09:10:00+03:00");
+		jdbcTemplate.update(
+			"""
+				insert into member_payroll_schedules (
+					id,
+					member_id,
+					label,
+					schedule_type,
+					day_of_month,
+					trigger_delay_days,
+					is_active,
+					created_at,
+					updated_at
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+				""",
+			payrollScheduleId,
+			MEMBER_ID,
+			"Main salary",
+			"fixed_day_of_month",
+			16,
+			1,
+			true,
+			now,
+			now
+		);
+		return payrollScheduleId;
+	}
+
+	private UUID insertLlmCollectionRequest(UUID payrollScheduleId, String requestId) {
+		UUID llmCollectionRequestId = UUID.fromString("77777777-7777-7777-7777-777777777777");
+		OffsetDateTime now = OffsetDateTime.parse("2026-03-15T09:15:00+03:00");
+		jdbcTemplate.update(
+			"""
+				insert into llm_collection_requests (
+					id,
+					request_id,
+					family_id,
+					member_id,
+					payroll_schedule_id,
+					period_year,
+					period_month,
+					reason,
+					status,
+					requested_fields,
+					nominal_payroll_date,
+					effective_payroll_date,
+					scheduled_trigger_date,
+					triggered_at,
+					request_payload,
+					created_at,
+					updated_at
+				)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?, cast(? as jsonb), ?, ?)
+				""",
+			llmCollectionRequestId,
+			requestId,
+			FAMILY_ID,
+			MEMBER_ID,
+			payrollScheduleId,
+			2026,
+			3,
+			"day_after_salary",
+			"accepted",
+			"[\"monthly_income\",\"monthly_expenses\",\"monthly_credit_payments\",\"liquid_savings\"]",
+			LocalDate.of(2026, 3, 16),
+			LocalDate.of(2026, 3, 16),
+			LocalDate.of(2026, 3, 17),
+			now,
+			"{\"request_id\":\"" + requestId + "\"}",
+			now,
+			now
+		);
+		return llmCollectionRequestId;
 	}
 
 	private void insertMember(

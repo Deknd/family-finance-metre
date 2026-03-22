@@ -1,11 +1,11 @@
 package com.deknd.familyfinancemetre.service;
 
-import com.deknd.familyfinancemetre.dto.intake.UserFinanceIntakeAcceptedResponse;
 import com.deknd.familyfinancemetre.dto.intake.UserFinanceIntakeRequest;
 import com.deknd.familyfinancemetre.dto.validation.ValidationErrorResponse.ValidationErrorDetail;
 import com.deknd.familyfinancemetre.entity.FamilyEntity;
 import com.deknd.familyfinancemetre.entity.FamilyMemberEntity;
 import com.deknd.familyfinancemetre.entity.FinanceSubmissionEntity;
+import com.deknd.familyfinancemetre.entity.LlmCollectionRequestEntity;
 import com.deknd.familyfinancemetre.entity.enums.SubmissionConfidence;
 import com.deknd.familyfinancemetre.entity.enums.SubmissionSource;
 import com.deknd.familyfinancemetre.exception.DuplicateSubmissionException;
@@ -20,7 +20,6 @@ import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -39,21 +38,20 @@ public class IntakeSubmissionService {
 	private final FinanceSubmissionRepository financeSubmissionRepository;
 	private final FamilyRepository familyRepository;
 	private final FamilyMemberRepository familyMemberRepository;
-	private final MemberFinanceSnapshotRecalculationService memberFinanceSnapshotRecalculationService;
-	private final FamilyDashboardSnapshotRecalculationService familyDashboardSnapshotRecalculationService;
 
 	/**
-	 * Принимает валидный intake payload, сохраняет его в {@code finance_submissions},
-	 * сразу пересчитывает {@code member_finance_snapshots} за период payload
-	 * и защищает endpoint от повторной обработки одного и того же
-	 * {@code external_submission_id}.
+	 * Сохраняет валидный intake payload в {@code finance_submissions}
+	 * и защищает запись от повторной обработки по {@code external_submission_id}.
 	 *
 	 * @param request входной payload от n8n после завершения опроса пользователя
-	 * @return ответ о принятии payload с идентификатором сохраненной submission
+	 * @param llmCollectionRequest связанный запрос запуска опроса или {@code null}, если intake пришел без связи
+	 * @return сохраненная запись intake submission
 	 * @throws DuplicateSubmissionException если payload с таким external submission id уже был обработан
 	 */
-	@Transactional
-	public UserFinanceIntakeAcceptedResponse accept(UserFinanceIntakeRequest request) {
+	public FinanceSubmissionEntity saveSubmission(
+		UserFinanceIntakeRequest request,
+		LlmCollectionRequestEntity llmCollectionRequest
+	) {
 		if (financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())) {
 			throw new DuplicateSubmissionException();
 		}
@@ -62,7 +60,8 @@ public class IntakeSubmissionService {
 		FinanceSubmissionEntity submission = buildSubmission(
 			request,
 			validatedReferences.family(),
-			validatedReferences.member()
+			validatedReferences.member(),
+			llmCollectionRequest
 		);
 		try {
 			financeSubmissionRepository.saveAndFlush(submission);
@@ -73,24 +72,7 @@ public class IntakeSubmissionService {
 			throw exception;
 		}
 
-		memberFinanceSnapshotRecalculationService.recalculateForMemberPeriod(
-			submission.getMember().getId(),
-			submission.getPeriodYear(),
-			submission.getPeriodMonth()
-		);
-		familyDashboardSnapshotRecalculationService.recalculateForFamilyPeriod(
-			submission.getFamily().getId(),
-			submission.getPeriodYear(),
-			submission.getPeriodMonth()
-		);
-
-		return new UserFinanceIntakeAcceptedResponse(
-			"accepted",
-			submission.getId().toString(),
-			request.familyId(),
-			request.memberId(),
-			true
-		);
+		return submission;
 	}
 
 	private ValidatedReferences validateReferences(UserFinanceIntakeRequest request) {
@@ -120,7 +102,8 @@ public class IntakeSubmissionService {
 	private FinanceSubmissionEntity buildSubmission(
 		UserFinanceIntakeRequest request,
 		FamilyEntity family,
-		FamilyMemberEntity member
+		FamilyMemberEntity member,
+		LlmCollectionRequestEntity llmCollectionRequest
 	) {
 		ObjectNode rawPayload = OBJECT_MAPPER.valueToTree(request);
 		String requestId = normalizeOptionalRequestId(request.requestId());
@@ -131,6 +114,7 @@ public class IntakeSubmissionService {
 		FinanceSubmissionEntity submission = new FinanceSubmissionEntity();
 		submission.setExternalSubmissionId(request.externalSubmissionId());
 		submission.setRequestId(requestId);
+		submission.setLlmCollectionRequest(llmCollectionRequest);
 		submission.setFamily(family);
 		submission.setMember(member);
 		submission.setSource(SubmissionSource.valueOf(request.source().toUpperCase(Locale.ROOT)));

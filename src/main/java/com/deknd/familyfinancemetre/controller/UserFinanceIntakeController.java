@@ -2,8 +2,9 @@ package com.deknd.familyfinancemetre.controller;
 
 import com.deknd.familyfinancemetre.dto.intake.UserFinanceIntakeAcceptedResponse;
 import com.deknd.familyfinancemetre.dto.intake.UserFinanceIntakeRequest;
-import com.deknd.familyfinancemetre.service.IntakeSubmissionService;
+import com.deknd.familyfinancemetre.service.UserFinanceIntakeOrchestrationService;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -12,14 +13,11 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api/v1/intake")
 public class UserFinanceIntakeController {
 
-	private final IntakeSubmissionService intakeSubmissionService;
-
-	public UserFinanceIntakeController(IntakeSubmissionService intakeSubmissionService) {
-		this.intakeSubmissionService = intakeSubmissionService;
-	}
+	private final UserFinanceIntakeOrchestrationService userFinanceIntakeOrchestrationService;
 
 	/**
 	 * Принимает валидный intake payload от n8n и передает его в сервис обработки.
@@ -30,6 +28,6 @@ public class UserFinanceIntakeController {
 	@PostMapping("/user-finance-data")
 	@ResponseStatus(HttpStatus.ACCEPTED)
 	public UserFinanceIntakeAcceptedResponse accept(@Valid @RequestBody UserFinanceIntakeRequest request) {
-		return intakeSubmissionService.accept(request);
+		return userFinanceIntakeOrchestrationService.accept(request);
 	}
 }

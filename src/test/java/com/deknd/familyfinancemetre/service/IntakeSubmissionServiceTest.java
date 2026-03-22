@@ -1,11 +1,11 @@
 package com.deknd.familyfinancemetre.service;
 
-import com.deknd.familyfinancemetre.dto.intake.UserFinanceIntakeAcceptedResponse;
 import com.deknd.familyfinancemetre.dto.intake.UserFinanceIntakeRequest;
 import com.deknd.familyfinancemetre.dto.validation.ValidationErrorResponse.ValidationErrorDetail;
 import com.deknd.familyfinancemetre.entity.FamilyEntity;
 import com.deknd.familyfinancemetre.entity.FamilyMemberEntity;
 import com.deknd.familyfinancemetre.entity.FinanceSubmissionEntity;
+import com.deknd.familyfinancemetre.entity.LlmCollectionRequestEntity;
 import com.deknd.familyfinancemetre.entity.enums.SubmissionConfidence;
 import com.deknd.familyfinancemetre.entity.enums.SubmissionSource;
 import com.deknd.familyfinancemetre.exception.DuplicateSubmissionException;
@@ -44,6 +44,7 @@ class IntakeSubmissionServiceTest {
 	private static final UUID FAMILY_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 	private static final UUID MEMBER_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
 	private static final UUID SUBMISSION_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
+	private static final UUID LLM_REQUEST_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
 
 	@Mock
 	private FinanceSubmissionRepository financeSubmissionRepository;
@@ -54,18 +55,12 @@ class IntakeSubmissionServiceTest {
 	@Mock
 	private FamilyMemberRepository familyMemberRepository;
 
-	@Mock
-	private MemberFinanceSnapshotRecalculationService memberFinanceSnapshotRecalculationService;
-
-	@Mock
-	private FamilyDashboardSnapshotRecalculationService familyDashboardSnapshotRecalculationService;
-
 	@InjectMocks
 	private IntakeSubmissionService intakeSubmissionService;
 
 	@Test
-	@DisplayName("После сохранения intake пересчитывает персональный и семейный snapshot")
-	void acceptSavesSubmissionAndReturnsStoredId() {
+	@DisplayName("Сохраняет submission без request_id и без связи с llm request")
+	void saveSubmissionPersistsPayloadWithoutCorrelationRequest() {
 		UserFinanceIntakeRequest request = validRequest();
 		FamilyEntity family = family(FAMILY_ID);
 		FamilyMemberEntity member = member(MEMBER_ID, family);
@@ -79,47 +74,69 @@ class IntakeSubmissionServiceTest {
 			return submission;
 		}).when(financeSubmissionRepository).saveAndFlush(any(FinanceSubmissionEntity.class));
 
-		UserFinanceIntakeAcceptedResponse response = intakeSubmissionService.accept(request);
+		FinanceSubmissionEntity savedSubmission = intakeSubmissionService.saveSubmission(request, null);
+
+		ArgumentCaptor<FinanceSubmissionEntity> submissionCaptor = ArgumentCaptor.forClass(FinanceSubmissionEntity.class);
+		verify(financeSubmissionRepository).saveAndFlush(submissionCaptor.capture());
+
+		FinanceSubmissionEntity capturedSubmission = submissionCaptor.getValue();
+		assertThat(capturedSubmission.getExternalSubmissionId()).isEqualTo("n8n-run-2026-03-15-001");
+		assertThat(capturedSubmission.getFamily()).isSameAs(family);
+		assertThat(capturedSubmission.getMember()).isSameAs(member);
+		assertThat(capturedSubmission.getSource()).isEqualTo(SubmissionSource.TELEGRAM);
+		assertThat(capturedSubmission.getPeriodYear()).isEqualTo(2026);
+		assertThat(capturedSubmission.getPeriodMonth()).isEqualTo((short) 3);
+		assertThat(capturedSubmission.getCollectedAt()).hasToString("2026-03-15T08:40+03:00");
+		assertThat(capturedSubmission.getMonthlyIncome()).isEqualTo(120000);
+		assertThat(capturedSubmission.getMonthlyExpenses()).isEqualTo(50000);
+		assertThat(capturedSubmission.getMonthlyCreditPayments()).isEqualTo(18000);
+		assertThat(capturedSubmission.getLiquidSavings()).isEqualTo(150000);
+		assertThat(capturedSubmission.getConfidence()).isEqualTo(SubmissionConfidence.MEDIUM);
+		assertThat(capturedSubmission.getNotes()).isEqualTo("User provided approximate values");
+		assertThat(capturedSubmission.getRawPayload().get("external_submission_id").asText())
+			.isEqualTo("n8n-run-2026-03-15-001");
+		assertThat(capturedSubmission.getRawPayload().has("request_id")).isFalse();
+		assertThat(capturedSubmission.getRequestId()).isNull();
+		assertThat(capturedSubmission.getLlmCollectionRequest()).isNull();
+		assertThat(savedSubmission).isSameAs(capturedSubmission);
+		assertThat(savedSubmission.getId()).isEqualTo(SUBMISSION_ID);
+	}
+
+	@Test
+	@DisplayName("Сохраняет request_id и связь с llm request, если orchestration уже нашел запрос")
+	void saveSubmissionPersistsLinkedLlmCollectionRequest() {
+		UserFinanceIntakeRequest request = validRequest("req-2026-03-15-member-anna");
+		FamilyEntity family = family(FAMILY_ID);
+		FamilyMemberEntity member = member(MEMBER_ID, family);
+		LlmCollectionRequestEntity llmCollectionRequest = llmCollectionRequest();
+
+		given(financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())).willReturn(false);
+		given(familyRepository.findById(FAMILY_ID)).willReturn(Optional.of(family));
+		given(familyMemberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
+		doAnswer(invocation -> {
+			FinanceSubmissionEntity submission = invocation.getArgument(0);
+			submission.setId(SUBMISSION_ID);
+			return submission;
+		}).when(financeSubmissionRepository).saveAndFlush(any(FinanceSubmissionEntity.class));
+
+		intakeSubmissionService.saveSubmission(request, llmCollectionRequest);
 
 		ArgumentCaptor<FinanceSubmissionEntity> submissionCaptor = ArgumentCaptor.forClass(FinanceSubmissionEntity.class);
 		verify(financeSubmissionRepository).saveAndFlush(submissionCaptor.capture());
 
 		FinanceSubmissionEntity savedSubmission = submissionCaptor.getValue();
-		assertThat(savedSubmission.getExternalSubmissionId()).isEqualTo("n8n-run-2026-03-15-001");
-		assertThat(savedSubmission.getFamily()).isSameAs(family);
-		assertThat(savedSubmission.getMember()).isSameAs(member);
-		assertThat(savedSubmission.getSource()).isEqualTo(SubmissionSource.TELEGRAM);
-		assertThat(savedSubmission.getPeriodYear()).isEqualTo(2026);
-		assertThat(savedSubmission.getPeriodMonth()).isEqualTo((short) 3);
-		assertThat(savedSubmission.getCollectedAt()).hasToString("2026-03-15T08:40+03:00");
-		assertThat(savedSubmission.getMonthlyIncome()).isEqualTo(120000);
-		assertThat(savedSubmission.getMonthlyExpenses()).isEqualTo(50000);
-		assertThat(savedSubmission.getMonthlyCreditPayments()).isEqualTo(18000);
-		assertThat(savedSubmission.getLiquidSavings()).isEqualTo(150000);
-		assertThat(savedSubmission.getConfidence()).isEqualTo(SubmissionConfidence.MEDIUM);
-		assertThat(savedSubmission.getNotes()).isEqualTo("User provided approximate values");
-		assertThat(savedSubmission.getRawPayload().get("external_submission_id").asText()).isEqualTo("n8n-run-2026-03-15-001");
-		assertThat(savedSubmission.getRawPayload().has("request_id")).isFalse();
-		assertThat(savedSubmission.getRequestId()).isNull();
-		assertThat(savedSubmission.getLlmCollectionRequest()).isNull();
-		verify(memberFinanceSnapshotRecalculationService)
-			.recalculateForMemberPeriod(MEMBER_ID, 2026, (short) 3);
-		verify(familyDashboardSnapshotRecalculationService)
-			.recalculateForFamilyPeriod(FAMILY_ID, 2026, (short) 3);
-
-		assertThat(response.status()).isEqualTo("accepted");
-		assertThat(response.submissionId()).isEqualTo(SUBMISSION_ID.toString());
-		assertThat(response.familyId()).isEqualTo(FAMILY_ID.toString());
-		assertThat(response.memberId()).isEqualTo(MEMBER_ID.toString());
-		assertThat(response.recalculationScheduled()).isTrue();
+		assertThat(savedSubmission.getRequestId()).isEqualTo("req-2026-03-15-member-anna");
+		assertThat(savedSubmission.getLlmCollectionRequest()).isSameAs(llmCollectionRequest);
+		assertThat(savedSubmission.getRawPayload().get("request_id").asText()).isEqualTo("req-2026-03-15-member-anna");
 	}
 
 	@Test
-	void acceptThrowsDuplicateSubmissionWhenExternalSubmissionIdAlreadyExists() {
+	@DisplayName("Бросает conflict, если external_submission_id уже был обработан")
+	void saveSubmissionThrowsDuplicateSubmissionWhenExternalSubmissionIdAlreadyExists() {
 		UserFinanceIntakeRequest request = validRequest();
 		given(financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())).willReturn(true);
 
-		assertThatThrownBy(() -> intakeSubmissionService.accept(request))
+		assertThatThrownBy(() -> intakeSubmissionService.saveSubmission(request, null))
 			.isInstanceOf(DuplicateSubmissionException.class)
 			.hasMessage(DuplicateSubmissionException.ERROR_MESSAGE);
 
@@ -129,7 +146,8 @@ class IntakeSubmissionServiceTest {
 	}
 
 	@Test
-	void acceptThrowsDuplicateSubmissionWhenUniqueConstraintIsViolatedDuringSave() {
+	@DisplayName("Преобразует нарушение unique constraint при сохранении в DuplicateSubmissionException")
+	void saveSubmissionThrowsDuplicateSubmissionWhenUniqueConstraintIsViolatedDuringSave() {
 		UserFinanceIntakeRequest request = validRequest();
 		FamilyEntity family = family(FAMILY_ID);
 		FamilyMemberEntity member = member(MEMBER_ID, family);
@@ -148,13 +166,14 @@ class IntakeSubmissionServiceTest {
 				)
 			));
 
-		assertThatThrownBy(() -> intakeSubmissionService.accept(request))
+		assertThatThrownBy(() -> intakeSubmissionService.saveSubmission(request, null))
 			.isInstanceOf(DuplicateSubmissionException.class)
 			.hasMessage(DuplicateSubmissionException.ERROR_MESSAGE);
 	}
 
 	@Test
-	void acceptPropagatesNonDuplicateDataIntegrityViolation() {
+	@DisplayName("Пробрасывает другие DataIntegrityViolationException без маскировки")
+	void saveSubmissionPropagatesNonDuplicateDataIntegrityViolation() {
 		UserFinanceIntakeRequest request = validRequest();
 		FamilyEntity family = family(FAMILY_ID);
 		FamilyMemberEntity member = member(MEMBER_ID, family);
@@ -165,7 +184,7 @@ class IntakeSubmissionServiceTest {
 		given(familyMemberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
 		given(financeSubmissionRepository.saveAndFlush(any(FinanceSubmissionEntity.class))).willThrow(exception);
 
-		assertThatThrownBy(() -> intakeSubmissionService.accept(request))
+		assertThatThrownBy(() -> intakeSubmissionService.saveSubmission(request, null))
 			.isSameAs(exception);
 
 		verify(familyRepository).findById(eq(FAMILY_ID));
@@ -173,7 +192,8 @@ class IntakeSubmissionServiceTest {
 	}
 
 	@Test
-	void acceptThrowsValidationErrorWhenFamilyDoesNotExist() {
+	@DisplayName("Возвращает validation error, если семья не найдена")
+	void saveSubmissionThrowsValidationErrorWhenFamilyDoesNotExist() {
 		UserFinanceIntakeRequest request = validRequest();
 		FamilyMemberEntity member = member(MEMBER_ID, family(FAMILY_ID));
 
@@ -182,7 +202,7 @@ class IntakeSubmissionServiceTest {
 		given(familyMemberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
 
 		InvalidIntakePayloadReferenceException exception = catchThrowableOfType(
-			() -> intakeSubmissionService.accept(request),
+			() -> intakeSubmissionService.saveSubmission(request, null),
 			InvalidIntakePayloadReferenceException.class
 		);
 
@@ -195,56 +215,8 @@ class IntakeSubmissionServiceTest {
 	}
 
 	@Test
-	void acceptSavesRequestIdWhenItIsPresentInPayload() {
-		UserFinanceIntakeRequest request = validRequest("req-2026-03-15-member-anna");
-		FamilyEntity family = family(FAMILY_ID);
-		FamilyMemberEntity member = member(MEMBER_ID, family);
-
-		given(financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())).willReturn(false);
-		given(familyRepository.findById(FAMILY_ID)).willReturn(Optional.of(family));
-		given(familyMemberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
-		doAnswer(invocation -> {
-			FinanceSubmissionEntity submission = invocation.getArgument(0);
-			submission.setId(SUBMISSION_ID);
-			return submission;
-		}).when(financeSubmissionRepository).saveAndFlush(any(FinanceSubmissionEntity.class));
-
-		intakeSubmissionService.accept(request);
-
-		ArgumentCaptor<FinanceSubmissionEntity> submissionCaptor = ArgumentCaptor.forClass(FinanceSubmissionEntity.class);
-		verify(financeSubmissionRepository).saveAndFlush(submissionCaptor.capture());
-
-		FinanceSubmissionEntity savedSubmission = submissionCaptor.getValue();
-		assertThat(savedSubmission.getRequestId()).isEqualTo("req-2026-03-15-member-anna");
-		assertThat(savedSubmission.getRawPayload().get("request_id").asText()).isEqualTo("req-2026-03-15-member-anna");
-	}
-
-	@Test
-	@DisplayName("Повторно вызывает пересчет семьи для периода сохраненного submission")
-	void acceptTriggersMemberSnapshotRecalculationForSavedSubmissionPeriod() {
-		UserFinanceIntakeRequest request = validRequest();
-		FamilyEntity family = family(FAMILY_ID);
-		FamilyMemberEntity member = member(MEMBER_ID, family);
-
-		given(financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())).willReturn(false);
-		given(familyRepository.findById(FAMILY_ID)).willReturn(Optional.of(family));
-		given(familyMemberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
-		doAnswer(invocation -> {
-			FinanceSubmissionEntity submission = invocation.getArgument(0);
-			submission.setId(SUBMISSION_ID);
-			return submission;
-		}).when(financeSubmissionRepository).saveAndFlush(any(FinanceSubmissionEntity.class));
-
-		intakeSubmissionService.accept(request);
-
-		verify(memberFinanceSnapshotRecalculationService)
-			.recalculateForMemberPeriod(MEMBER_ID, 2026, (short) 3);
-		verify(familyDashboardSnapshotRecalculationService)
-			.recalculateForFamilyPeriod(FAMILY_ID, 2026, (short) 3);
-	}
-
-	@Test
-	void acceptThrowsValidationErrorWhenMemberDoesNotExist() {
+	@DisplayName("Возвращает validation error, если участник не найден")
+	void saveSubmissionThrowsValidationErrorWhenMemberDoesNotExist() {
 		UserFinanceIntakeRequest request = validRequest();
 		FamilyEntity family = family(FAMILY_ID);
 
@@ -253,7 +225,7 @@ class IntakeSubmissionServiceTest {
 		given(familyMemberRepository.findById(MEMBER_ID)).willReturn(Optional.empty());
 
 		InvalidIntakePayloadReferenceException exception = catchThrowableOfType(
-			() -> intakeSubmissionService.accept(request),
+			() -> intakeSubmissionService.saveSubmission(request, null),
 			InvalidIntakePayloadReferenceException.class
 		);
 
@@ -266,10 +238,11 @@ class IntakeSubmissionServiceTest {
 	}
 
 	@Test
-	void acceptThrowsValidationErrorWhenMemberBelongsToAnotherFamily() {
+	@DisplayName("Возвращает validation error, если участник принадлежит другой семье")
+	void saveSubmissionThrowsValidationErrorWhenMemberBelongsToAnotherFamily() {
 		UserFinanceIntakeRequest request = validRequest();
 		FamilyEntity family = family(FAMILY_ID);
-		FamilyEntity anotherFamily = family(UUID.fromString("44444444-4444-4444-4444-444444444444"));
+		FamilyEntity anotherFamily = family(UUID.fromString("55555555-5555-5555-5555-555555555555"));
 		FamilyMemberEntity member = member(MEMBER_ID, anotherFamily);
 
 		given(financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())).willReturn(false);
@@ -277,7 +250,7 @@ class IntakeSubmissionServiceTest {
 		given(familyMemberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
 
 		InvalidIntakePayloadReferenceException exception = catchThrowableOfType(
-			() -> intakeSubmissionService.accept(request),
+			() -> intakeSubmissionService.saveSubmission(request, null),
 			InvalidIntakePayloadReferenceException.class
 		);
 
@@ -290,7 +263,8 @@ class IntakeSubmissionServiceTest {
 	}
 
 	@Test
-	void acceptReturnsValidationErrorsInStableOrderWhenFamilyAndMemberDoNotExist() {
+	@DisplayName("Возвращает ошибки ссылок в стабильном порядке, если одновременно не найдены семья и участник")
+	void saveSubmissionReturnsValidationErrorsInStableOrderWhenFamilyAndMemberDoNotExist() {
 		UserFinanceIntakeRequest request = validRequest();
 
 		given(financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())).willReturn(false);
@@ -298,7 +272,7 @@ class IntakeSubmissionServiceTest {
 		given(familyMemberRepository.findById(MEMBER_ID)).willReturn(Optional.empty());
 
 		InvalidIntakePayloadReferenceException exception = catchThrowableOfType(
-			() -> intakeSubmissionService.accept(request),
+			() -> intakeSubmissionService.saveSubmission(request, null),
 			InvalidIntakePayloadReferenceException.class
 		);
 
@@ -342,5 +316,12 @@ class IntakeSubmissionServiceTest {
 		member.setId(memberId);
 		member.setFamily(family);
 		return member;
+	}
+
+	private LlmCollectionRequestEntity llmCollectionRequest() {
+		LlmCollectionRequestEntity llmCollectionRequest = new LlmCollectionRequestEntity();
+		llmCollectionRequest.setId(LLM_REQUEST_ID);
+		llmCollectionRequest.setRequestId("req-2026-03-15-member-anna");
+		return llmCollectionRequest;
 	}
 }
