@@ -172,7 +172,7 @@ class UserFinanceIntakePersistenceIntegrationTest {
 		assertThat(((Number) storedDashboardRow.get("period_month")).shortValue()).isEqualTo((short) 3);
 		assertThat(storedDashboardRow.get("status")).isEqualTo("normal");
 		assertThat(storedDashboardRow.get("status_text")).isEqualTo("Норма");
-		assertThat(storedDashboardRow.get("status_reason")).isEqualTo("Policy статуса будет определен отдельно");
+		assertThat(storedDashboardRow.get("status_reason")).isEqualTo("Показатели в пределах нормы");
 		assertThat(storedDashboardRow.get("monthly_income")).isEqualTo(120000);
 		assertThat(storedDashboardRow.get("monthly_expenses")).isEqualTo(50000);
 		assertThat((java.math.BigDecimal) storedDashboardRow.get("credit_load_percent")).isEqualByComparingTo("15.00");
