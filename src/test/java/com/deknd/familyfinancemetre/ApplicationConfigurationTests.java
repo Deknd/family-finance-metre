@@ -2,6 +2,7 @@ package com.deknd.familyfinancemetre;
 
 import com.deknd.familyfinancemetre.config.ApplicationProperties;
 import com.deknd.familyfinancemetre.config.DatabaseProperties;
+import com.deknd.familyfinancemetre.service.DeviceDashboardReadService;
 import com.deknd.familyfinancemetre.service.FamilyDashboardSnapshotRecalculationService;
 import com.deknd.familyfinancemetre.service.IntakeSubmissionService;
 import com.deknd.familyfinancemetre.service.MemberFinanceSnapshotRecalculationService;
@@ -34,6 +35,9 @@ class ApplicationConfigurationTests {
 
 	@MockitoBean
 	private UserFinanceIntakeOrchestrationService userFinanceIntakeOrchestrationService;
+
+	@MockitoBean
+	private DeviceDashboardReadService deviceDashboardReadService;
 
 	@Autowired
 	private DatabaseProperties databaseProperties;

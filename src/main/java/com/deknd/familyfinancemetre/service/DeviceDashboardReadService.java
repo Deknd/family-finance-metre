@@ -6,7 +6,6 @@ import com.deknd.familyfinancemetre.exception.DashboardNotReadyException;
 import com.deknd.familyfinancemetre.repository.FamilyDashboardSnapshotRepository;
 import com.deknd.familyfinancemetre.security.principal.DevicePrincipal;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,7 +14,6 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
 @Service
-@ConditionalOnBean(FamilyDashboardSnapshotRepository.class)
 @RequiredArgsConstructor
 public class DeviceDashboardReadService {
 

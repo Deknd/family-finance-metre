@@ -2,6 +2,7 @@ package com.deknd.familyfinancemetre.controller;
 
 import com.deknd.familyfinancemetre.dto.validation.ValidationErrorResponse;
 import com.deknd.familyfinancemetre.dto.validation.ValidationErrorResponse.ValidationErrorDetail;
+import com.deknd.familyfinancemetre.exception.DashboardNotReadyException;
 import com.deknd.familyfinancemetre.entity.enums.DatabaseEnum;
 import com.deknd.familyfinancemetre.exception.DuplicateSubmissionException;
 import com.deknd.familyfinancemetre.exception.InvalidIntakePayloadReferenceException;
@@ -90,6 +91,18 @@ public class ApiValidationExceptionHandler {
 	public ResponseEntity<ApiErrorResponse> handleDuplicateSubmission(DuplicateSubmissionException exception) {
 		return ResponseEntity.status(HttpStatus.CONFLICT)
 			.body(ApiErrorResponse.of(DuplicateSubmissionException.ERROR_CODE, exception.getMessage()));
+	}
+
+	/**
+	 * Возвращает ошибку отсутствия готового dashboard snapshot для устройства.
+	 *
+	 * @param exception исключение о том, что dashboard еще не подготовлен
+	 * @return ответ с кодом отсутствующих dashboard-данных
+	 */
+	@ExceptionHandler(DashboardNotReadyException.class)
+	public ResponseEntity<ApiErrorResponse> handleDashboardNotReady(DashboardNotReadyException exception) {
+		return ResponseEntity.status(HttpStatus.NOT_FOUND)
+			.body(ApiErrorResponse.of(DashboardNotReadyException.ERROR_CODE, exception.getMessage()));
 	}
 
 	/**
