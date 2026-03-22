@@ -6,6 +6,7 @@ import com.deknd.familyfinancemetre.exception.InvalidIntakePayloadReferenceExcep
 import com.deknd.familyfinancemetre.service.FamilyDashboardSnapshotRecalculationService;
 import com.deknd.familyfinancemetre.service.IntakeSubmissionService;
 import com.deknd.familyfinancemetre.service.MemberFinanceSnapshotRecalculationService;
+import com.deknd.familyfinancemetre.service.UserFinanceIntakeOrchestrationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -33,6 +34,9 @@ class UserFinanceIntakeControllerIntegrationTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
+	private UserFinanceIntakeOrchestrationService userFinanceIntakeOrchestrationService;
+
+	@MockitoBean
 	private IntakeSubmissionService intakeSubmissionService;
 
 	@MockitoBean
@@ -43,7 +47,7 @@ class UserFinanceIntakeControllerIntegrationTest {
 
 	@Test
 	void validPayloadReturnsAccepted() throws Exception {
-		given(intakeSubmissionService.accept(any())).willReturn(new UserFinanceIntakeAcceptedResponse(
+		given(userFinanceIntakeOrchestrationService.accept(any())).willReturn(new UserFinanceIntakeAcceptedResponse(
 			"accepted",
 			"subm_001",
 			"11111111-1111-1111-1111-111111111111",
@@ -65,7 +69,7 @@ class UserFinanceIntakeControllerIntegrationTest {
 
 	@Test
 	void payloadWithRequestIdReturnsAccepted() throws Exception {
-		given(intakeSubmissionService.accept(any())).willReturn(new UserFinanceIntakeAcceptedResponse(
+		given(userFinanceIntakeOrchestrationService.accept(any())).willReturn(new UserFinanceIntakeAcceptedResponse(
 			"accepted",
 			"subm_001",
 			"11111111-1111-1111-1111-111111111111",
@@ -191,7 +195,7 @@ class UserFinanceIntakeControllerIntegrationTest {
 
 	@Test
 	void invalidPayloadReferencesReturnValidationError() throws Exception {
-		given(intakeSubmissionService.accept(any()))
+		given(userFinanceIntakeOrchestrationService.accept(any()))
 			.willThrow(new InvalidIntakePayloadReferenceException(
 				java.util.List.of(
 					new ValidationErrorDetail("family_id", "family does not exist"),

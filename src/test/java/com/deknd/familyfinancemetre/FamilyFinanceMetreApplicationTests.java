@@ -3,6 +3,7 @@ package com.deknd.familyfinancemetre;
 import com.deknd.familyfinancemetre.service.IntakeSubmissionService;
 import com.deknd.familyfinancemetre.service.FamilyDashboardSnapshotRecalculationService;
 import com.deknd.familyfinancemetre.service.MemberFinanceSnapshotRecalculationService;
+import com.deknd.familyfinancemetre.service.UserFinanceIntakeOrchestrationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -28,6 +29,9 @@ class FamilyFinanceMetreApplicationTests {
 
 	@MockitoBean
 	private FamilyDashboardSnapshotRecalculationService familyDashboardSnapshotRecalculationService;
+
+	@MockitoBean
+	private UserFinanceIntakeOrchestrationService userFinanceIntakeOrchestrationService;
 
 	@Autowired
 	private MockMvc mockMvc;
