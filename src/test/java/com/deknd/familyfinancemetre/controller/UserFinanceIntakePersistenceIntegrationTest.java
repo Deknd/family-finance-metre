@@ -3,6 +3,7 @@ package com.deknd.familyfinancemetre.controller;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -71,6 +72,73 @@ class UserFinanceIntakePersistenceIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("Финальный intake-поток с request_id сохраняет submission и пересчитывает оба snapshot")
+	void intakeFlowWithRequestIdPersistsSubmissionAndDerivedSnapshots() throws Exception {
+		UUID payrollScheduleId = insertPayrollSchedule();
+		UUID llmCollectionRequestId = insertLlmCollectionRequest(payrollScheduleId, "req-2026-03-15-member-anna");
+
+		String responseBody = mockMvc.perform(post("/api/v1/intake/user-finance-data")
+				.header("X-API-Key", API_KEY)
+				.contentType(APPLICATION_JSON)
+				.content(validPayloadWithRequestId()))
+			.andExpect(status().isAccepted())
+			.andExpect(jsonPath("$.status").value("accepted"))
+			.andExpect(jsonPath("$.family_id").value(FAMILY_ID.toString()))
+			.andExpect(jsonPath("$.member_id").value(MEMBER_ID.toString()))
+			.andExpect(jsonPath("$.recalculation_scheduled").value(true))
+			.andReturn()
+			.getResponse()
+			.getContentAsString();
+
+		JsonNode responseJson = objectMapper.readTree(responseBody);
+		UUID submissionId = UUID.fromString(responseJson.get("submission_id").asText());
+
+		Map<String, Object> storedSubmissionRow = loadSubmissionRow(submissionId);
+		assertThat(storedSubmissionRow.get("external_submission_id")).isEqualTo("n8n-run-2026-03-15-001");
+		assertThat(storedSubmissionRow.get("family_id")).isEqualTo(FAMILY_ID.toString());
+		assertThat(storedSubmissionRow.get("member_id")).isEqualTo(MEMBER_ID.toString());
+		assertThat(storedSubmissionRow.get("request_id")).isEqualTo("req-2026-03-15-member-anna");
+		assertThat(storedSubmissionRow.get("llm_collection_request_id")).isEqualTo(llmCollectionRequestId.toString());
+		assertThat(storedSubmissionRow.get("monthly_income")).isEqualTo(120000);
+		assertThat(storedSubmissionRow.get("monthly_expenses")).isEqualTo(50000);
+		assertThat(storedSubmissionRow.get("monthly_credit_payments")).isEqualTo(18000);
+		assertThat(storedSubmissionRow.get("liquid_savings")).isEqualTo(150000);
+		assertThat(storedSubmissionRow.get("raw_external_submission_id")).isEqualTo("n8n-run-2026-03-15-001");
+		assertThat(storedSubmissionRow.get("raw_request_id")).isEqualTo("req-2026-03-15-member-anna");
+
+		Map<String, Object> storedSnapshotRow = loadMemberSnapshotRow();
+		assertThat(storedSnapshotRow.get("family_id")).isEqualTo(FAMILY_ID.toString());
+		assertThat(storedSnapshotRow.get("member_id")).isEqualTo(MEMBER_ID.toString());
+		assertThat(storedSnapshotRow.get("period_year")).isEqualTo(2026);
+		assertThat(((Number) storedSnapshotRow.get("period_month")).shortValue()).isEqualTo((short) 3);
+		assertThat(storedSnapshotRow.get("source_submission_id")).isEqualTo(submissionId.toString());
+		assertThat(storedSnapshotRow.get("monthly_income")).isEqualTo(120000);
+		assertThat(storedSnapshotRow.get("monthly_expenses")).isEqualTo(50000);
+		assertThat(storedSnapshotRow.get("monthly_credit_payments")).isEqualTo(18000);
+		assertThat(storedSnapshotRow.get("liquid_savings")).isEqualTo(150000);
+		assertThat(storedSnapshotRow.get("collected_at").toString()).contains("2026-03-15 08:40:00");
+
+		Map<String, Object> storedDashboardRow = loadDashboardRow();
+		assertThat(storedDashboardRow.get("family_id")).isEqualTo(FAMILY_ID.toString());
+		assertThat(storedDashboardRow.get("period_year")).isEqualTo(2026);
+		assertThat(((Number) storedDashboardRow.get("period_month")).shortValue()).isEqualTo((short) 3);
+		assertThat(storedDashboardRow.get("status")).isEqualTo("normal");
+		assertThat(storedDashboardRow.get("status_text")).isEqualTo("Норма");
+		assertThat(storedDashboardRow.get("status_reason")).isEqualTo("Показатели в пределах нормы");
+		assertThat(storedDashboardRow.get("monthly_income")).isEqualTo(120000);
+		assertThat(storedDashboardRow.get("monthly_expenses")).isEqualTo(50000);
+		assertThat((java.math.BigDecimal) storedDashboardRow.get("credit_load_percent")).isEqualByComparingTo("15.00");
+		assertThat((java.math.BigDecimal) storedDashboardRow.get("emergency_fund_months")).isEqualByComparingTo("3.00");
+		assertThat(storedDashboardRow.get("member_count_used")).isEqualTo(1);
+		assertThat(storedDashboardRow.get("calculated_at")).isNotNull();
+
+		Map<String, Object> llmRequestRow = loadLlmCollectionRequestRow(llmCollectionRequestId);
+		assertThat(llmRequestRow.get("status")).isEqualTo("completed");
+		assertThat(llmRequestRow.get("completed_at")).isNotNull();
+	}
+
+	@Test
+	@DisplayName("Intake без request_id создает submission, member snapshot и family dashboard snapshot")
 	void validPayloadPersistsSubmissionCreatesMemberSnapshotAndReturnsStoredId() throws Exception {
 		String responseBody = mockMvc.perform(post("/api/v1/intake/user-finance-data")
 				.header("X-API-Key", API_KEY)
@@ -184,6 +252,7 @@ class UserFinanceIntakePersistenceIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("Повторный external_submission_id возвращает conflict и не создает вторую запись")
 	void duplicateExternalSubmissionIdReturnsConflictAndKeepsSingleRow() throws Exception {
 		mockMvc.perform(post("/api/v1/intake/user-finance-data")
 				.header("X-API-Key", API_KEY)
@@ -209,6 +278,7 @@ class UserFinanceIntakePersistenceIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("Intake с request_id сохраняет correlation id и завершает llm collection request")
 	void payloadWithRequestIdPersistsCorrelationId() throws Exception {
 		UUID payrollScheduleId = insertPayrollSchedule();
 		UUID llmCollectionRequestId = insertLlmCollectionRequest(payrollScheduleId, "req-2026-03-15-member-anna");
@@ -257,6 +327,7 @@ class UserFinanceIntakePersistenceIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("Неизвестный request_id возвращает validation error и не сохраняет производные данные")
 	void unknownRequestIdReturnsValidationErrorAndDoesNotPersistAnything() throws Exception {
 		mockMvc.perform(post("/api/v1/intake/user-finance-data")
 				.header("X-API-Key", API_KEY)
@@ -277,6 +348,7 @@ class UserFinanceIntakePersistenceIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("Несколько intake за месяц суммируют доход и обновляют snapshot по самой свежей оценке")
 	void secondPayloadForSamePeriodUpdatesExistingMemberSnapshotAndAggregatesMonthlyIncome() throws Exception {
 		mockMvc.perform(post("/api/v1/intake/user-finance-data")
 				.header("X-API-Key", API_KEY)
@@ -361,6 +433,7 @@ class UserFinanceIntakePersistenceIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("Более старый collected_at не затирает неаддитивные поля из более свежей submission")
 	void olderPayloadForSamePeriodDoesNotOverwriteSnapshotFieldsFromFreshestSubmission() throws Exception {
 		mockMvc.perform(post("/api/v1/intake/user-finance-data")
 				.header("X-API-Key", API_KEY)
@@ -406,6 +479,7 @@ class UserFinanceIntakePersistenceIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("Несуществующая семья возвращает validation error и не сохраняет submission")
 	void missingFamilyReferenceReturnsValidationErrorAndDoesNotPersistSubmission() throws Exception {
 		mockMvc.perform(post("/api/v1/intake/user-finance-data")
 				.header("X-API-Key", API_KEY)
@@ -424,6 +498,7 @@ class UserFinanceIntakePersistenceIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("Участник из другой семьи возвращает validation error и не сохраняет submission")
 	void memberFromAnotherFamilyReturnsValidationErrorAndDoesNotPersistSubmission() throws Exception {
 		insertFamily(ANOTHER_FAMILY_ID, "Another family");
 		insertMember(ANOTHER_MEMBER_ID, ANOTHER_FAMILY_ID, "Olga", "Petrova", "olga_petrova");
@@ -442,6 +517,89 @@ class UserFinanceIntakePersistenceIntegrationTest {
 
 		Integer submissionsCount = jdbcTemplate.queryForObject("select count(*) from finance_submissions", Integer.class);
 		assertThat(submissionsCount).isZero();
+	}
+
+	private Map<String, Object> loadSubmissionRow(UUID submissionId) {
+		return jdbcTemplate.queryForMap(
+			"""
+				select
+					external_submission_id,
+					request_id,
+					llm_collection_request_id::text as llm_collection_request_id,
+					family_id::text as family_id,
+					member_id::text as member_id,
+					monthly_income,
+					monthly_expenses,
+					monthly_credit_payments,
+					liquid_savings,
+					raw_payload ->> 'external_submission_id' as raw_external_submission_id,
+					raw_payload ->> 'request_id' as raw_request_id
+				from finance_submissions
+				where id = ?
+				""",
+			submissionId
+		);
+	}
+
+	private Map<String, Object> loadMemberSnapshotRow() {
+		return jdbcTemplate.queryForMap(
+			"""
+				select
+					family_id::text as family_id,
+					member_id::text as member_id,
+					period_year,
+					period_month,
+					source_submission_id::text as source_submission_id,
+					monthly_income,
+					monthly_expenses,
+					monthly_credit_payments,
+					liquid_savings,
+					collected_at
+				from member_finance_snapshots
+				where member_id = ? and period_year = ? and period_month = ?
+				""",
+			MEMBER_ID,
+			2026,
+			(short) 3
+		);
+	}
+
+	private Map<String, Object> loadDashboardRow() {
+		return jdbcTemplate.queryForMap(
+			"""
+				select
+					family_id::text as family_id,
+					period_year,
+					period_month,
+					status,
+					status_text,
+					status_reason,
+					monthly_income,
+					monthly_expenses,
+					credit_load_percent,
+					emergency_fund_months,
+					member_count_used,
+					calculated_at
+				from family_dashboard_snapshots
+				where family_id = ? and period_year = ? and period_month = ?
+				""",
+			FAMILY_ID,
+			2026,
+			(short) 3
+		);
+	}
+
+	private Map<String, Object> loadLlmCollectionRequestRow(UUID llmCollectionRequestId) {
+		return jdbcTemplate.queryForMap(
+			"""
+				select
+					status,
+					completed_at
+				from llm_collection_requests
+				where id = ?
+				""",
+			llmCollectionRequestId
+		);
 	}
 
 	private void insertFamily() {
