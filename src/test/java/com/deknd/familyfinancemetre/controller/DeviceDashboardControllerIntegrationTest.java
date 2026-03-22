@@ -104,6 +104,17 @@ class DeviceDashboardControllerIntegrationTest {
 		assertThat(getDeviceLastSeenAt()).isNull();
 	}
 
+	@Test
+	@DisplayName("GET /api/v1/device/dashboard возвращает 401, если передан неверный токен устройства")
+	void getDashboardReturnsUnauthorizedWhenDeviceTokenIsInvalid() throws Exception {
+		mockMvc.perform(get("/api/v1/device/dashboard").header("X-Device-Token", "wrong-token"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.error.code").value("INVALID_DEVICE_TOKEN"))
+			.andExpect(jsonPath("$.error.message").value("Device token is invalid"));
+
+		assertThat(getDeviceLastSeenAt()).isNull();
+	}
+
 	private void insertFamily() {
 		OffsetDateTime now = OffsetDateTime.parse("2026-03-15T08:00:00+03:00");
 		jdbcTemplate.update(

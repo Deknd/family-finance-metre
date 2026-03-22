@@ -251,6 +251,8 @@
 
 ### Задача 10. Добавить integration тесты для device endpoint
 
+Статус: выполнено.
+
 Что сделать:
 
 - тест на успешный `GET /api/v1/device/dashboard`;
