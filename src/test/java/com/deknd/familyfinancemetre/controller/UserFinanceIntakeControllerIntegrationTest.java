@@ -3,6 +3,7 @@ package com.deknd.familyfinancemetre.controller;
 import com.deknd.familyfinancemetre.dto.intake.UserFinanceIntakeAcceptedResponse;
 import com.deknd.familyfinancemetre.dto.validation.ValidationErrorResponse.ValidationErrorDetail;
 import com.deknd.familyfinancemetre.exception.InvalidIntakePayloadReferenceException;
+import com.deknd.familyfinancemetre.service.DeviceDashboardReadService;
 import com.deknd.familyfinancemetre.service.FamilyDashboardSnapshotRecalculationService;
 import com.deknd.familyfinancemetre.service.IntakeSubmissionService;
 import com.deknd.familyfinancemetre.service.MemberFinanceSnapshotRecalculationService;
@@ -44,6 +45,9 @@ class UserFinanceIntakeControllerIntegrationTest {
 
 	@MockitoBean
 	private FamilyDashboardSnapshotRecalculationService familyDashboardSnapshotRecalculationService;
+
+	@MockitoBean
+	private DeviceDashboardReadService deviceDashboardReadService;
 
 	@Test
 	void validPayloadReturnsAccepted() throws Exception {
