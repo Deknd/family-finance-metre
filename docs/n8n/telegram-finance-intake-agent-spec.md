@@ -15,11 +15,11 @@
 
 Документ не заменяет серверные API-контракты. Для внешних HTTP-интерфейсов нужно использовать:
 
-- [llm-agent-trigger-spec.md](/D:/IdeaProjects/family-finance-metre/docs/llm-agent-trigger-spec.md)
-- [server-api-spec.md](/D:/IdeaProjects/family-finance-metre/docs/server-api-spec.md)
+- [llm-agent-trigger-spec.md](./llm-agent-trigger-spec.md)
+- [api-spec.md](../server/api-spec.md)
 
 Пошаговый план реализации описан в
-[n8n-telegram-finance-intake-implementation-plan.md](/D:/IdeaProjects/family-finance-metre/docs/n8n-telegram-finance-intake-implementation-plan.md).
+[telegram-finance-intake-implementation-plan.md](./telegram-finance-intake-implementation-plan.md).
 
 ## 2. Границы MVP
 
@@ -157,7 +157,8 @@ AI-оркестратор не должен:
 
 ### 5.3. Входные данные
 
-`Workflow A` принимает payload, описанный в [llm-agent-trigger-spec.md](/D:/IdeaProjects/family-finance-metre/docs/llm-agent-trigger-spec.md).
+`Workflow A` принимает payload, описанный в
+[llm-agent-trigger-spec.md](./llm-agent-trigger-spec.md).
 
 Критично сохранить в orchestration state:
 
@@ -399,7 +400,8 @@ AI-агент не должен возвращать свободный текс
 
 ## 11. Mapping итогового callback на сервер
 
-Итоговый callback должен соответствовать [server-api-spec.md](/D:/IdeaProjects/family-finance-metre/docs/server-api-spec.md) и фактическому DTO `UserFinanceIntakeRequest`.
+Итоговый callback должен соответствовать
+[api-spec.md](../server/api-spec.md) и фактическому DTO `UserFinanceIntakeRequest`.
 
 ### 11.1. Ограничения формата
 

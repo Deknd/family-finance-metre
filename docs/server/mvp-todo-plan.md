@@ -7,13 +7,13 @@
 Документ собран по фактическому состоянию проекта на `17.03.2026` и
 по актуальным документам:
 
-- `docs/server-api-spec.md`
-- `docs/server-architecture.md`
-- `docs/server-collection-logic.md`
-- `docs/database-spec.md`
-- `docs/llm-agent-trigger-spec.md`
-- `docs/device-ui.md`
-- `docs/user-survey-mvp.md`
+- `docs/server/api-spec.md`
+- `docs/server/architecture.md`
+- `docs/server/collection-logic.md`
+- `docs/server/database-spec.md`
+- `docs/n8n/llm-agent-trigger-spec.md`
+- `docs/device/ui.md`
+- `docs/product/user-survey-mvp.md`
 
 В отличие от первой версии, здесь перечислены только те задачи,
 которые реально остались до MVP.
@@ -50,7 +50,7 @@
 
 - сервер сам определяет payroll-события и запускает сбор данных;
 - сервер создает и ведет `llm_collection_requests`;
-- сервер вызывает webhook в `n8n` по контракту из `llm-agent-trigger-spec.md`;
+- сервер вызывает webhook в `n8n` по контракту из `docs/n8n/llm-agent-trigger-spec.md`;
 - callback от `n8n` не только сохраняется в `finance_submissions`,
   но и пересчитывает `member_finance_snapshots` и `family_dashboard_snapshots`;
 - устройство получает готовый dashboard через `GET /api/v1/device/dashboard`;
@@ -213,7 +213,7 @@
 - находить его семью;
 - выбирать актуальный `family_dashboard_snapshot`
   за последний доступный расчетный период семьи;
-- подготовить response-модель из `server-api-spec.md`;
+- подготовить response-модель из `docs/server/api-spec.md`;
 - брать `generated_at` из `family_dashboard_snapshots.calculated_at`;
 - формировать `display.updated_at_label` из того же значения в таймзоне семьи.
 
@@ -353,7 +353,7 @@
 
 Что сделать:
 
-- собрать payload по `docs/llm-agent-trigger-spec.md`;
+- собрать payload по `docs/n8n/llm-agent-trigger-spec.md`;
 - использовать `RestClient`;
 - передавать `Authorization: Bearer`;
 - поддержать `connectTimeout` и `readTimeout`;
@@ -429,10 +429,10 @@
 
 Что сделать:
 
-- обновить `docs/server-api-spec.md`;
-- обновить `docs/llm-agent-trigger-spec.md`;
-- при необходимости уточнить `docs/database-spec.md`;
-- поправить устаревшие места в `docs/local-seed-reference-data.md`;
+- обновить `docs/server/api-spec.md`;
+- обновить `docs/n8n/llm-agent-trigger-spec.md`;
+- при необходимости уточнить `docs/server/database-spec.md`;
+- поправить устаревшие места в `docs/development/local-seed-reference-data.md`;
 - явно зафиксировать UUID-контракты, policy статусов
   и поведение при наличии optional `request_id`.
 

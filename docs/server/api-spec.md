@@ -11,7 +11,8 @@
 
 Отдельный контракт запуска LLM-агента вынесен в другой документ.
 
-Подробная внутренняя схема `n8n`-агента описана в [n8n-telegram-finance-intake-agent-spec.md](/D:/IdeaProjects/family-finance-metre/docs/n8n-telegram-finance-intake-agent-spec.md).
+Подробная внутренняя схема `n8n`-агента описана в
+[telegram-finance-intake-agent-spec.md](../n8n/telegram-finance-intake-agent-spec.md).
 
 ## 2. Роли API
 

@@ -12,9 +12,11 @@
 - запустить orchestration workflow в `n8n`;
 - инициировать Telegram-сессию сбора данных.
 
-Этот документ не описывает обратную отправку результата на сервер. Она описана в [server-api-spec.md](/D:/IdeaProjects/family-finance-metre/docs/server-api-spec.md).
+Этот документ не описывает обратную отправку результата на сервер. Она описана в
+[api-spec.md](../server/api-spec.md).
 
-Подробная внутренняя архитектура `n8n` описана в [n8n-telegram-finance-intake-agent-spec.md](/D:/IdeaProjects/family-finance-metre/docs/n8n-telegram-finance-intake-agent-spec.md).
+Подробная внутренняя архитектура `n8n` описана в
+[telegram-finance-intake-agent-spec.md](./telegram-finance-intake-agent-spec.md).
 
 ## 2. Когда сервер вызывает LLM-агента
 
