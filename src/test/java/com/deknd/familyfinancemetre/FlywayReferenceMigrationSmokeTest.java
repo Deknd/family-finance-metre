@@ -16,6 +16,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -59,6 +60,136 @@ class FlywayReferenceMigrationSmokeTest {
 		assertThat(migrationApplied("1")).isTrue();
 		assertThat(migrationApplied("2")).isTrue();
 		assertThat(migrationApplied("3")).isTrue();
+		assertThat(migrationApplied("4")).isTrue();
+	}
+
+	@Test
+	void appliesCommentsToAllTablesAndColumns() {
+		assertTableAndColumnsHaveComments(
+			"families",
+			List.of("id", "name", "timezone", "currency_code", "status", "created_at", "updated_at")
+		);
+		assertTableAndColumnsHaveComments(
+			"family_members",
+			List.of(
+				"id",
+				"family_id",
+				"first_name",
+				"last_name",
+				"display_name",
+				"telegram_chat_id",
+				"telegram_username",
+				"is_active",
+				"created_at",
+				"updated_at"
+			)
+		);
+		assertTableAndColumnsHaveComments(
+			"devices",
+			List.of("id", "family_id", "name", "device_token_hash", "status", "last_seen_at", "created_at", "updated_at")
+		);
+		assertTableAndColumnsHaveComments(
+			"member_payroll_schedules",
+			List.of(
+				"id",
+				"member_id",
+				"label",
+				"schedule_type",
+				"day_of_month",
+				"trigger_delay_days",
+				"is_active",
+				"created_at",
+				"updated_at"
+			)
+		);
+		assertTableAndColumnsHaveComments(
+			"llm_collection_requests",
+			List.of(
+				"id",
+				"request_id",
+				"family_id",
+				"member_id",
+				"payroll_schedule_id",
+				"period_year",
+				"period_month",
+				"reason",
+				"status",
+				"requested_fields",
+				"nominal_payroll_date",
+				"effective_payroll_date",
+				"scheduled_trigger_date",
+				"triggered_at",
+				"accepted_at",
+				"completed_at",
+				"workflow_run_id",
+				"request_payload",
+				"response_payload",
+				"error_message",
+				"created_at",
+				"updated_at"
+			)
+		);
+		assertTableAndColumnsHaveComments(
+			"finance_submissions",
+			List.of(
+				"id",
+				"external_submission_id",
+				"request_id",
+				"llm_collection_request_id",
+				"family_id",
+				"member_id",
+				"source",
+				"period_year",
+				"period_month",
+				"collected_at",
+				"monthly_income",
+				"monthly_expenses",
+				"monthly_credit_payments",
+				"liquid_savings",
+				"confidence",
+				"notes",
+				"raw_payload",
+				"created_at"
+			)
+		);
+		assertTableAndColumnsHaveComments(
+			"member_finance_snapshots",
+			List.of(
+				"id",
+				"family_id",
+				"member_id",
+				"period_year",
+				"period_month",
+				"source_submission_id",
+				"monthly_income",
+				"monthly_expenses",
+				"monthly_credit_payments",
+				"liquid_savings",
+				"collected_at",
+				"created_at",
+				"updated_at"
+			)
+		);
+		assertTableAndColumnsHaveComments(
+			"family_dashboard_snapshots",
+			List.of(
+				"id",
+				"family_id",
+				"period_year",
+				"period_month",
+				"status",
+				"status_text",
+				"status_reason",
+				"monthly_income",
+				"monthly_expenses",
+				"credit_load_percent",
+				"emergency_fund_months",
+				"member_count_used",
+				"calculated_at",
+				"created_at",
+				"updated_at"
+			)
+		);
 	}
 
 	@Test
@@ -1524,6 +1655,51 @@ class FlywayReferenceMigrationSmokeTest {
 		);
 
 		return tableCount != null && tableCount > 0;
+	}
+
+	private void assertTableAndColumnsHaveComments(String tableName, List<String> columnNames) {
+		assertThat(tableComment(tableName))
+			.as("Комментарий таблицы %s", tableName)
+			.isNotBlank();
+
+		for (String columnName : columnNames) {
+			assertThat(columnComment(tableName, columnName))
+				.as("Комментарий колонки %s.%s", tableName, columnName)
+				.isNotBlank();
+		}
+	}
+
+	private String tableComment(String tableName) {
+		return jdbcTemplate.queryForObject(
+			"""
+				select obj_description(c.oid, 'pg_class')
+				from pg_catalog.pg_class c
+				join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+				where n.nspname = 'public'
+				  and c.relname = ?
+			""",
+			String.class,
+			tableName
+		);
+	}
+
+	private String columnComment(String tableName, String columnName) {
+		return jdbcTemplate.queryForObject(
+			"""
+				select col_description(c.oid, a.attnum)
+				from pg_catalog.pg_class c
+				join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+				join pg_catalog.pg_attribute a on a.attrelid = c.oid
+				where n.nspname = 'public'
+				  and c.relname = ?
+				  and a.attname = ?
+				  and a.attnum > 0
+				  and not a.attisdropped
+			""",
+			String.class,
+			tableName,
+			columnName
+		);
 	}
 
 	private UUID insertFamily(String familyName) {

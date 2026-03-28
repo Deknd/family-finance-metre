@@ -10,11 +10,17 @@ import org.hibernate.annotations.UuidGenerator;
 
 import java.util.UUID;
 
+/**
+ * Базовый суперкласс для сущностей с UUID-идентификатором.
+ */
 @Getter
 @Setter
 @MappedSuperclass
 public abstract class AbstractUuidEntity {
 
+	/**
+	 * Уникальный идентификатор записи.
+	 */
 	@Id
 	@GeneratedValue
 	@UuidGenerator
