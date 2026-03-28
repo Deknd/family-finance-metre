@@ -14,9 +14,9 @@
 
 Документ опирается на:
 
-- [n8n-telegram-finance-intake-agent-spec.md](/D:/IdeaProjects/family-finance-metre/docs/n8n-telegram-finance-intake-agent-spec.md)
-- [llm-agent-trigger-spec.md](/D:/IdeaProjects/family-finance-metre/docs/llm-agent-trigger-spec.md)
-- [server-api-spec.md](/D:/IdeaProjects/family-finance-metre/docs/server-api-spec.md)
+- [telegram-finance-intake-agent-spec.md](./telegram-finance-intake-agent-spec.md)
+- [llm-agent-trigger-spec.md](./llm-agent-trigger-spec.md)
+- [api-spec.md](../server/api-spec.md)
 
 ## 2. Что считаем готовым результатом
 
@@ -103,9 +103,9 @@
 Что сделать:
 
 - перенести в `n8n` фактический контракт стартового webhook из
-  `docs/llm-agent-trigger-spec.md`;
+  `docs/n8n/llm-agent-trigger-spec.md`;
 - перенести фактический callback-контракт из
-  `docs/server-api-spec.md`;
+  `docs/server/api-spec.md`;
 - отдельно описать внутреннюю JSON-схему structured output для conversational AI-агента;
 - отдельно описать JSON-структуру session state в Redis.
 

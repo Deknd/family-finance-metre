@@ -80,7 +80,7 @@
 
 Актуальная архитектура сервера зафиксирована в отдельном документе:
 
-- `docs/server-architecture.md`
+- `docs/server/architecture.md`
 
 Базовый подход:
 
@@ -381,7 +381,7 @@ Spring-реализация:
 Spring-реализация:
 
 - `@RestController`
-- response DTO, совпадающий с `server-api-spec.md`
+- response DTO, совпадающий с `docs/server/api-spec.md`
 
 Результат:
 
@@ -465,7 +465,7 @@ Spring-реализация:
 
 Что сделать:
 
-- собрать payload по `llm-agent-trigger-spec.md`;
+- собрать payload по `docs/n8n/llm-agent-trigger-spec.md`;
 - отправлять запрос в webhook `n8n`;
 - поддержать таймаут и обработку ошибок.
 
