@@ -74,7 +74,7 @@ Endpoint запускает `Workflow A / Intake Orchestrator Agent`.
 
 ```json
 {
-  "request_id": "req-2026-03-15-member-anna",
+  "request_id": "99999999-9999-9999-9999-999999999999",
   "triggered_at": "2026-03-15T09:00:00+03:00",
   "reason": "day_after_salary",
   "family": {
@@ -119,7 +119,7 @@ Endpoint запускает `Workflow A / Intake Orchestrator Agent`.
 
 ## 8. Поля запроса
 
-- `request_id` - уникальный id запуска со стороны сервера
+- `request_id` - уникальный UUID запуска со стороны сервера, используемый как основной correlation id цепочки
 - `triggered_at` - время запуска
 - `reason` - причина запуска, например `day_after_salary`
 - `family.id` - идентификатор семьи в формате UUID
@@ -158,7 +158,7 @@ Endpoint запускает `Workflow A / Intake Orchestrator Agent`.
 ```json
 {
   "status": "accepted",
-  "request_id": "req-2026-03-15-member-anna",
+  "request_id": "99999999-9999-9999-9999-999999999999",
   "workflow_run_id": "n8n-run-001"
 }
 ```

@@ -235,7 +235,7 @@ Content-Type: application/json
 ```json
 {
   "external_submission_id": "n8n-run-2026-03-15-001",
-  "request_id": "req-2026-03-15-member-anna",
+  "request_id": "99999999-9999-9999-9999-999999999999",
   "family_id": "11111111-1111-1111-1111-111111111111",
   "member_id": "22222222-2222-2222-2222-222222222222",
   "source": "telegram",
@@ -261,7 +261,7 @@ Content-Type: application/json
 ### Поля запроса
 
 - `external_submission_id` - уникальный id отправки со стороны `n8n`
-- `request_id` - необязательный correlation id исходного запуска опроса со стороны сервера
+- `request_id` - необязательный correlation id исходного запуска опроса со стороны сервера в формате UUID-строки
 - `family_id` - идентификатор семьи в формате UUID
 - `member_id` - идентификатор члена семьи, которого опрашивали, в формате UUID
 - `source` - источник данных, для MVP ожидается `telegram`
@@ -292,7 +292,7 @@ Content-Type: application/json
 ```json
 {
   "status": "accepted",
-  "submission_id": "subm_001",
+  "submission_id": "88888888-8888-8888-8888-888888888888",
   "family_id": "11111111-1111-1111-1111-111111111111",
   "member_id": "22222222-2222-2222-2222-222222222222",
   "recalculation_scheduled": true
