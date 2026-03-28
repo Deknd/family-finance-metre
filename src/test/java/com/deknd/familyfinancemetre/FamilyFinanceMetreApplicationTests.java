@@ -1,10 +1,10 @@
 package com.deknd.familyfinancemetre;
 
-import com.deknd.familyfinancemetre.service.DeviceDashboardReadService;
-import com.deknd.familyfinancemetre.service.IntakeSubmissionService;
-import com.deknd.familyfinancemetre.service.FamilyDashboardSnapshotRecalculationService;
-import com.deknd.familyfinancemetre.service.MemberFinanceSnapshotRecalculationService;
-import com.deknd.familyfinancemetre.service.UserFinanceIntakeOrchestrationService;
+import com.deknd.familyfinancemetre.flow.dashboard.service.DeviceDashboardReadService;
+import com.deknd.familyfinancemetre.flow.intake.service.IntakeSubmissionService;
+import com.deknd.familyfinancemetre.core.snapshot.service.FamilyDashboardSnapshotRecalculationService;
+import com.deknd.familyfinancemetre.core.snapshot.service.MemberFinanceSnapshotRecalculationService;
+import com.deknd.familyfinancemetre.flow.intake.service.UserFinanceIntakeOrchestrationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -52,3 +52,4 @@ class FamilyFinanceMetreApplicationTests {
 	}
 
 }
+

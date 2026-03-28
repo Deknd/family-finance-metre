@@ -1,29 +1,29 @@
 package com.deknd.familyfinancemetre;
 
-import com.deknd.familyfinancemetre.entity.DeviceEntity;
-import com.deknd.familyfinancemetre.entity.FamilyDashboardSnapshotEntity;
-import com.deknd.familyfinancemetre.entity.FamilyEntity;
-import com.deknd.familyfinancemetre.entity.FamilyMemberEntity;
-import com.deknd.familyfinancemetre.entity.FinanceSubmissionEntity;
-import com.deknd.familyfinancemetre.entity.LlmCollectionRequestEntity;
-import com.deknd.familyfinancemetre.entity.MemberFinanceSnapshotEntity;
-import com.deknd.familyfinancemetre.entity.MemberPayrollScheduleEntity;
-import com.deknd.familyfinancemetre.entity.enums.DashboardStatus;
-import com.deknd.familyfinancemetre.entity.enums.DeviceStatus;
-import com.deknd.familyfinancemetre.entity.enums.FamilyStatus;
-import com.deknd.familyfinancemetre.entity.enums.LlmCollectionRequestReason;
-import com.deknd.familyfinancemetre.entity.enums.LlmCollectionRequestStatus;
-import com.deknd.familyfinancemetre.entity.enums.PayrollScheduleType;
-import com.deknd.familyfinancemetre.entity.enums.SubmissionConfidence;
-import com.deknd.familyfinancemetre.entity.enums.SubmissionSource;
-import com.deknd.familyfinancemetre.repository.DeviceRepository;
-import com.deknd.familyfinancemetre.repository.FamilyDashboardSnapshotRepository;
-import com.deknd.familyfinancemetre.repository.FamilyMemberRepository;
-import com.deknd.familyfinancemetre.repository.FamilyRepository;
-import com.deknd.familyfinancemetre.repository.FinanceSubmissionRepository;
-import com.deknd.familyfinancemetre.repository.LlmCollectionRequestRepository;
-import com.deknd.familyfinancemetre.repository.MemberFinanceSnapshotRepository;
-import com.deknd.familyfinancemetre.repository.MemberPayrollScheduleRepository;
+import com.deknd.familyfinancemetre.core.device.entity.DeviceEntity;
+import com.deknd.familyfinancemetre.core.snapshot.entity.FamilyDashboardSnapshotEntity;
+import com.deknd.familyfinancemetre.core.family.entity.FamilyEntity;
+import com.deknd.familyfinancemetre.core.family.entity.FamilyMemberEntity;
+import com.deknd.familyfinancemetre.core.snapshot.entity.FinanceSubmissionEntity;
+import com.deknd.familyfinancemetre.core.collection.entity.LlmCollectionRequestEntity;
+import com.deknd.familyfinancemetre.core.snapshot.entity.MemberFinanceSnapshotEntity;
+import com.deknd.familyfinancemetre.core.payroll.entity.MemberPayrollScheduleEntity;
+import com.deknd.familyfinancemetre.core.snapshot.enums.DashboardStatus;
+import com.deknd.familyfinancemetre.core.device.enums.DeviceStatus;
+import com.deknd.familyfinancemetre.core.family.enums.FamilyStatus;
+import com.deknd.familyfinancemetre.core.collection.enums.LlmCollectionRequestReason;
+import com.deknd.familyfinancemetre.core.collection.enums.LlmCollectionRequestStatus;
+import com.deknd.familyfinancemetre.core.payroll.enums.PayrollScheduleType;
+import com.deknd.familyfinancemetre.core.snapshot.enums.SubmissionConfidence;
+import com.deknd.familyfinancemetre.core.snapshot.enums.SubmissionSource;
+import com.deknd.familyfinancemetre.core.device.repository.DeviceRepository;
+import com.deknd.familyfinancemetre.core.snapshot.repository.FamilyDashboardSnapshotRepository;
+import com.deknd.familyfinancemetre.core.family.repository.FamilyMemberRepository;
+import com.deknd.familyfinancemetre.core.family.repository.FamilyRepository;
+import com.deknd.familyfinancemetre.core.snapshot.repository.FinanceSubmissionRepository;
+import com.deknd.familyfinancemetre.core.collection.repository.LlmCollectionRequestRepository;
+import com.deknd.familyfinancemetre.core.snapshot.repository.MemberFinanceSnapshotRepository;
+import com.deknd.familyfinancemetre.core.payroll.repository.MemberPayrollScheduleRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
@@ -472,3 +472,4 @@ class JpaPersistenceIntegrationTest {
 		return OffsetDateTime.parse(localDateTime + "+03:00");
 	}
 }
+
