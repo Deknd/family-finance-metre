@@ -92,7 +92,7 @@
 - создать credential для Redis;
 - создать credential для LLM-провайдера;
 - создать credential для callback HTTP-запросов на сервер;
-- завести переменные окружения для URL сервера, API key, webhook token, TTL сессии.
+- завести переменные окружения для URL сервера, API key, shared secret webhook-вызова от сервера, TTL сессии.
 
 Результат:
 

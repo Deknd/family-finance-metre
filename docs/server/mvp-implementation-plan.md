@@ -467,6 +467,8 @@ Spring-реализация:
 
 - собрать payload по `docs/n8n/llm-agent-trigger-spec.md`;
 - отправлять запрос в webhook `n8n`;
+- передавать `Authorization: Bearer <shared-secret>` из конфигурации;
+- считать этот `Bearer` в MVP заранее согласованным общим секретом, а не OAuth/JWT токеном от внешнего provider;
 - поддержать таймаут и обработку ошибок.
 
 Spring-реализация:

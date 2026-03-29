@@ -355,7 +355,8 @@
 
 - собрать payload по `docs/n8n/llm-agent-trigger-spec.md`;
 - использовать `RestClient`;
-- передавать `Authorization: Bearer`;
+- передавать `Authorization: Bearer <shared-secret>`;
+- брать shared secret из конфигурации приложения, без отдельного issuer токенов;
 - поддержать `connectTimeout` и `readTimeout`;
 - сохранять `response_payload` или ошибку вызова.
 
