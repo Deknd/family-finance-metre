@@ -14,7 +14,6 @@ import com.deknd.familyfinancemetre.core.family.repository.FamilyMemberRepositor
 import com.deknd.familyfinancemetre.core.family.repository.FamilyRepository;
 import com.deknd.familyfinancemetre.core.snapshot.repository.FinanceSubmissionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
@@ -33,29 +32,37 @@ import java.util.UUID;
 public class IntakeSubmissionService {
 
 	private static final String DUPLICATE_SUBMISSION_CONSTRAINT = "uq_finance_submissions_external_submission_id";
-	private static final ObjectMapper OBJECT_MAPPER = JsonMapper.builder().findAndAddModules().build();
 
+	private final ObjectMapper objectMapper;
 	private final FinanceSubmissionRepository financeSubmissionRepository;
 	private final FamilyRepository familyRepository;
 	private final FamilyMemberRepository familyMemberRepository;
 
 	/**
+	 * Проверяет, что intake payload с таким {@code external_submission_id} еще не обрабатывался.
+	 *
+	 * @param externalSubmissionId внешний идентификатор callback payload
+	 * @throws DuplicateSubmissionException если payload с таким идентификатором уже сохранен
+	 */
+	void ensureExternalSubmissionIdIsNew(String externalSubmissionId) {
+		if (financeSubmissionRepository.existsByExternalSubmissionId(externalSubmissionId)) {
+			throw new DuplicateSubmissionException();
+		}
+	}
+
+	/**
 	 * Сохраняет валидный intake payload в {@code finance_submissions}
-	 * и защищает запись от повторной обработки по {@code external_submission_id}.
+	 * после того, как orchestration уже выполнил pre-check по {@code external_submission_id}.
 	 *
 	 * @param request входной payload от n8n после завершения опроса пользователя
 	 * @param llmCollectionRequest связанный запрос запуска опроса или {@code null}, если intake пришел без связи
 	 * @return сохраненная запись intake submission
-	 * @throws DuplicateSubmissionException если payload с таким external submission id уже был обработан
+	 * @throws DuplicateSubmissionException если во время сохранения сработал unique constraint
 	 */
-	public FinanceSubmissionEntity saveSubmission(
+	FinanceSubmissionEntity saveSubmission(
 		UserFinanceIntakeRequest request,
 		LlmCollectionRequestEntity llmCollectionRequest
 	) {
-		if (financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())) {
-			throw new DuplicateSubmissionException();
-		}
-
 		ValidatedReferences validatedReferences = validateReferences(request);
 		FinanceSubmissionEntity submission = buildSubmission(
 			request,
@@ -105,7 +112,7 @@ public class IntakeSubmissionService {
 		FamilyMemberEntity member,
 		LlmCollectionRequestEntity llmCollectionRequest
 	) {
-		ObjectNode rawPayload = OBJECT_MAPPER.valueToTree(request);
+		ObjectNode rawPayload = objectMapper.valueToTree(request);
 		String requestId = normalizeOptionalRequestId(request.requestId());
 		if (requestId == null) {
 			rawPayload.remove("request_id");

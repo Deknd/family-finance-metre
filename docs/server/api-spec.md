@@ -279,7 +279,12 @@ Content-Type: application/json
 
 Если `request_id` не передан, сервер все равно принимает payload и обрабатывает его как обычный intake без связки с конкретным `llm_collection_request`.
 
-Если `request_id` передан, но такой `llm_collection_request` отсутствует, сервер возвращает `422 Unprocessable Entity` с `VALIDATION_ERROR`.
+Если `request_id` передан, сервер требует, чтобы соответствующий `llm_collection_request`
+существовал и находился в статусе `accepted`.
+
+Если `request_id` передан, но такой `llm_collection_request` отсутствует
+или уже не находится в статусе `accepted`, сервер возвращает
+`422 Unprocessable Entity` с `VALIDATION_ERROR`.
 
 ### Семантика intake при нескольких выплатах в месяц
 
@@ -336,7 +341,9 @@ Content-Type: application/json
 
 - `family_id` не существует;
 - `member_id` не существует;
-- `request_id` передан, но соответствующий `llm_collection_request` не найден.
+- `request_id` передан, но соответствующий `llm_collection_request` не найден;
+- `request_id` передан, но соответствующий `llm_collection_request`
+  не находится в статусе `accepted`.
 
 Пример для несуществующего `request_id`:
 
@@ -350,6 +357,23 @@ Content-Type: application/json
     {
       "field": "request_id",
       "message": "llm collection request does not exist"
+    }
+  ]
+}
+```
+
+Пример для `request_id`, который найден, но уже не находится в статусе `accepted`:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed"
+  },
+  "details": [
+    {
+      "field": "request_id",
+      "message": "llm collection request must be in accepted status"
     }
   ]
 }

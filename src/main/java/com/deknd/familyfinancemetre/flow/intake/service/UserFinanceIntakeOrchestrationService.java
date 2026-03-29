@@ -1,8 +1,9 @@
 package com.deknd.familyfinancemetre.flow.intake.service;
 
 import com.deknd.familyfinancemetre.core.collection.entity.LlmCollectionRequestEntity;
-import com.deknd.familyfinancemetre.core.collection.enums.LlmCollectionRequestStatus;
-import com.deknd.familyfinancemetre.core.collection.repository.LlmCollectionRequestRepository;
+import com.deknd.familyfinancemetre.core.collection.exception.LlmCollectionRequestInvalidStateException;
+import com.deknd.familyfinancemetre.core.collection.exception.LlmCollectionRequestNotFoundException;
+import com.deknd.familyfinancemetre.core.collection.service.LlmCollectionRequestLifecycleService;
 import com.deknd.familyfinancemetre.core.snapshot.entity.FinanceSubmissionEntity;
 import com.deknd.familyfinancemetre.core.snapshot.service.FamilyDashboardSnapshotRecalculationService;
 import com.deknd.familyfinancemetre.core.snapshot.service.MemberFinanceSnapshotRecalculationService;
@@ -14,8 +15,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Clock;
-import java.time.OffsetDateTime;
 import java.util.List;
 
 @Service
@@ -25,8 +24,7 @@ public class UserFinanceIntakeOrchestrationService {
 	private final IntakeSubmissionService intakeSubmissionService;
 	private final MemberFinanceSnapshotRecalculationService memberFinanceSnapshotRecalculationService;
 	private final FamilyDashboardSnapshotRecalculationService familyDashboardSnapshotRecalculationService;
-	private final LlmCollectionRequestRepository llmCollectionRequestRepository;
-	private final Clock clock;
+	private final LlmCollectionRequestLifecycleService llmCollectionRequestLifecycleService;
 
 	/**
 	 * Выполняет полный intake-поток: связывает callback с запросом агента,
@@ -37,6 +35,7 @@ public class UserFinanceIntakeOrchestrationService {
 	 */
 	@Transactional
 	public UserFinanceIntakeAcceptedResponse accept(UserFinanceIntakeRequest request) {
+		intakeSubmissionService.ensureExternalSubmissionIdIsNew(request.externalSubmissionId());
 		String normalizedRequestId = normalizeOptionalRequestId(request.requestId());
 		LlmCollectionRequestEntity llmCollectionRequest = resolveLlmCollectionRequest(normalizedRequestId);
 		FinanceSubmissionEntity submission = intakeSubmissionService.saveSubmission(request, llmCollectionRequest);
@@ -53,8 +52,7 @@ public class UserFinanceIntakeOrchestrationService {
 		);
 
 		if (llmCollectionRequest != null) {
-			llmCollectionRequest.setStatus(LlmCollectionRequestStatus.COMPLETED);
-			llmCollectionRequest.setCompletedAt(OffsetDateTime.now(clock));
+			llmCollectionRequestLifecycleService.markCompleted(llmCollectionRequest);
 		}
 
 		return new UserFinanceIntakeAcceptedResponse(
@@ -71,10 +69,13 @@ public class UserFinanceIntakeOrchestrationService {
 			return null;
 		}
 
-		return llmCollectionRequestRepository.findByRequestId(requestId)
-			.orElseThrow(() -> new InvalidIntakePayloadReferenceException(List.of(
-				new ValidationErrorDetail("request_id", "llm collection request does not exist")
-			)));
+		try {
+			return llmCollectionRequestLifecycleService.resolveAcceptedForIntake(requestId);
+		} catch (LlmCollectionRequestNotFoundException exception) {
+			throw invalidRequestIdReference("llm collection request does not exist");
+		} catch (LlmCollectionRequestInvalidStateException exception) {
+			throw invalidRequestIdReference("llm collection request must be in accepted status");
+		}
 	}
 
 	private String normalizeOptionalRequestId(String requestId) {
@@ -83,6 +84,12 @@ public class UserFinanceIntakeOrchestrationService {
 		}
 
 		return requestId;
+	}
+
+	private InvalidIntakePayloadReferenceException invalidRequestIdReference(String message) {
+		return new InvalidIntakePayloadReferenceException(List.of(
+			new ValidationErrorDetail("request_id", message)
+		));
 	}
 }
 

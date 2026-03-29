@@ -369,6 +369,8 @@
 
 ### Задача 14. Реализовать lifecycle статусов `llm_collection_requests`
 
+Статус: выполнено.
+
 Что сделать:
 
 - после создания держать запрос в `pending`;
@@ -380,6 +382,11 @@
 Результат:
 
 - по каждому payroll-trigger сервер хранит понятный статус интеграционного шага.
+- lifecycle вынесен в общий `core.collection` сервис,
+  который используется и из `flow.collection`, и из `flow.intake`;
+- server-side переходы зафиксированы как
+  `pending -> accepted`, `pending -> failed`, `accepted -> completed`;
+- статус `cancelled` остается зарезервированным для будущей server-side отмены.
 
 ### Задача 15. Реализовать ежедневный scheduler payroll collection
 
@@ -398,6 +405,8 @@
 
 ### Задача 16. Замкнуть callback intake с `llm_collection_requests`
 
+Статус: выполнено.
+
 Что сделать:
 
 - при intake искать `llm_collection_request` по `request_id`, если он передан;
@@ -405,11 +414,16 @@
 - после успешного пересчета snapshot-ов переводить запрос в `completed`;
 - сохранять `completed_at`;
 - определить и зафиксировать policy на случай,
-  если `request_id` передан, но запрос не найден.
+  если `request_id` передан, но запрос не найден
+  или находится не в статусе `accepted`.
 
 Результат:
 
 - цепочка `server -> n8n -> Telegram -> server` становится сквозной и наблюдаемой.
+- intake завершает запрос только из статуса `accepted`;
+- если `request_id` не найден или указывает на запрос в статусе
+  `pending`, `failed`, `completed` или `cancelled`,
+  сервер возвращает `422 VALIDATION_ERROR` и не создает производные данные.
 
 ### Задача 17. Добавить тесты для payroll logic, scheduler и `n8n` integration
 
