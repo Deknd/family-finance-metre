@@ -465,16 +465,17 @@ Spring-реализация:
 
 Что сделать:
 
-- собрать payload по `docs/n8n/llm-agent-trigger-spec.md`;
+- использовать уже сохраненный `llm_collection_requests.request_payload` как источник тела запроса;
 - отправлять запрос в webhook `n8n`;
 - передавать `Authorization: Bearer <shared-secret>` из конфигурации;
 - считать этот `Bearer` в MVP заранее согласованным общим секретом, а не OAuth/JWT токеном от внешнего provider;
-- поддержать таймаут и обработку ошибок.
+- поддержать таймаут и contract validation ответа.
 
 Spring-реализация:
 
 - использовать `RestClient` для синхронного HTTP-вызова;
-- вынести клиент в отдельный `N8nClient`.
+- вынести клиент в отдельный `N8nClient`;
+- возвращать структурированный результат вызова без изменения lifecycle статусов.
 
 Результат:
 
@@ -485,8 +486,8 @@ Spring-реализация:
 Что сделать:
 
 - при успешном ответе `n8n` переводить запись в `accepted`;
-- сохранять `workflow_run_id`;
-- при ошибке сохранять `failed` и `error_message`.
+- сохранять `response_payload`, `workflow_run_id` и `accepted_at`;
+- при ошибке сохранять `failed`, `response_payload` при наличии и `error_message`.
 
 Spring-реализация:
 

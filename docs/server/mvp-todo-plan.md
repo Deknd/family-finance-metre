@@ -351,14 +351,17 @@
 
 ### Задача 13. Реализовать HTTP-клиент вызова `n8n`
 
+Статус: выполнено.
+
 Что сделать:
 
-- собрать payload по `docs/n8n/llm-agent-trigger-spec.md`;
+- использовать уже сохраненный `llm_collection_requests.request_payload` как источник тела запроса;
 - использовать `RestClient`;
 - передавать `Authorization: Bearer <shared-secret>`;
 - брать shared secret из конфигурации приложения, без отдельного issuer токенов;
 - поддержать `connectTimeout` и `readTimeout`;
-- сохранять `response_payload` или ошибку вызова.
+- валидировать ответ `202 Accepted` по полям `status`, `request_id`, `workflow_run_id`;
+- возвращать структурированный результат вызова для следующего шага lifecycle.
 
 Результат:
 
@@ -370,9 +373,9 @@
 
 - после создания держать запрос в `pending`;
 - при успешном ответе `n8n` переводить в `accepted`;
-- сохранять `workflow_run_id` и `accepted_at`;
+- сохранять `response_payload`, `workflow_run_id` и `accepted_at`;
 - при ошибке переводить в `failed`;
-- сохранять `error_message`.
+- сохранять `response_payload`, если оно есть, и `error_message`.
 
 Результат:
 
