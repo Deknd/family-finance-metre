@@ -13,6 +13,8 @@ import com.deknd.familyfinancemetre.flow.intake.exception.InvalidIntakePayloadRe
 import com.deknd.familyfinancemetre.core.family.repository.FamilyMemberRepository;
 import com.deknd.familyfinancemetre.core.family.repository.FamilyRepository;
 import com.deknd.familyfinancemetre.core.snapshot.repository.FinanceSubmissionRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 
@@ -55,6 +58,9 @@ class IntakeSubmissionServiceTest {
 	@Mock
 	private FamilyMemberRepository familyMemberRepository;
 
+	@Spy
+	private ObjectMapper objectMapper = JsonMapper.builder().findAndAddModules().build();
+
 	@InjectMocks
 	private IntakeSubmissionService intakeSubmissionService;
 
@@ -65,7 +71,6 @@ class IntakeSubmissionServiceTest {
 		FamilyEntity family = family(FAMILY_ID);
 		FamilyMemberEntity member = member(MEMBER_ID, family);
 
-		given(financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())).willReturn(false);
 		given(familyRepository.findById(FAMILY_ID)).willReturn(Optional.of(family));
 		given(familyMemberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
 		doAnswer(invocation -> {
@@ -110,7 +115,6 @@ class IntakeSubmissionServiceTest {
 		FamilyMemberEntity member = member(MEMBER_ID, family);
 		LlmCollectionRequestEntity llmCollectionRequest = llmCollectionRequest();
 
-		given(financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())).willReturn(false);
 		given(familyRepository.findById(FAMILY_ID)).willReturn(Optional.of(family));
 		given(familyMemberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
 		doAnswer(invocation -> {
@@ -131,12 +135,12 @@ class IntakeSubmissionServiceTest {
 	}
 
 	@Test
-	@DisplayName("Бросает conflict, если external_submission_id уже был обработан")
-	void saveSubmissionThrowsDuplicateSubmissionWhenExternalSubmissionIdAlreadyExists() {
+	@DisplayName("Проверка дубликата бросает conflict, если external_submission_id уже был обработан")
+	void ensureExternalSubmissionIdIsNewThrowsDuplicateSubmissionWhenExternalSubmissionIdAlreadyExists() {
 		UserFinanceIntakeRequest request = validRequest();
 		given(financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())).willReturn(true);
 
-		assertThatThrownBy(() -> intakeSubmissionService.saveSubmission(request, null))
+		assertThatThrownBy(() -> intakeSubmissionService.ensureExternalSubmissionIdIsNew(request.externalSubmissionId()))
 			.isInstanceOf(DuplicateSubmissionException.class)
 			.hasMessage(DuplicateSubmissionException.ERROR_MESSAGE);
 
@@ -152,7 +156,6 @@ class IntakeSubmissionServiceTest {
 		FamilyEntity family = family(FAMILY_ID);
 		FamilyMemberEntity member = member(MEMBER_ID, family);
 
-		given(financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())).willReturn(false);
 		given(familyRepository.findById(FAMILY_ID)).willReturn(Optional.of(family));
 		given(familyMemberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
 		given(financeSubmissionRepository.saveAndFlush(any(FinanceSubmissionEntity.class)))
@@ -179,7 +182,6 @@ class IntakeSubmissionServiceTest {
 		FamilyMemberEntity member = member(MEMBER_ID, family);
 		DataIntegrityViolationException exception = new DataIntegrityViolationException("foreign key violation");
 
-		given(financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())).willReturn(false);
 		given(familyRepository.findById(FAMILY_ID)).willReturn(Optional.of(family));
 		given(familyMemberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
 		given(financeSubmissionRepository.saveAndFlush(any(FinanceSubmissionEntity.class))).willThrow(exception);
@@ -197,7 +199,6 @@ class IntakeSubmissionServiceTest {
 		UserFinanceIntakeRequest request = validRequest();
 		FamilyMemberEntity member = member(MEMBER_ID, family(FAMILY_ID));
 
-		given(financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())).willReturn(false);
 		given(familyRepository.findById(FAMILY_ID)).willReturn(Optional.empty());
 		given(familyMemberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
 
@@ -220,7 +221,6 @@ class IntakeSubmissionServiceTest {
 		UserFinanceIntakeRequest request = validRequest();
 		FamilyEntity family = family(FAMILY_ID);
 
-		given(financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())).willReturn(false);
 		given(familyRepository.findById(FAMILY_ID)).willReturn(Optional.of(family));
 		given(familyMemberRepository.findById(MEMBER_ID)).willReturn(Optional.empty());
 
@@ -245,7 +245,6 @@ class IntakeSubmissionServiceTest {
 		FamilyEntity anotherFamily = family(UUID.fromString("55555555-5555-5555-5555-555555555555"));
 		FamilyMemberEntity member = member(MEMBER_ID, anotherFamily);
 
-		given(financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())).willReturn(false);
 		given(familyRepository.findById(FAMILY_ID)).willReturn(Optional.of(family));
 		given(familyMemberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
 
@@ -267,7 +266,6 @@ class IntakeSubmissionServiceTest {
 	void saveSubmissionReturnsValidationErrorsInStableOrderWhenFamilyAndMemberDoNotExist() {
 		UserFinanceIntakeRequest request = validRequest();
 
-		given(financeSubmissionRepository.existsByExternalSubmissionId(request.externalSubmissionId())).willReturn(false);
 		given(familyRepository.findById(FAMILY_ID)).willReturn(Optional.empty());
 		given(familyMemberRepository.findById(MEMBER_ID)).willReturn(Optional.empty());
 

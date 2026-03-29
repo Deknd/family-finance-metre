@@ -1,5 +1,6 @@
 package com.deknd.familyfinancemetre;
 
+import com.deknd.familyfinancemetre.core.collection.repository.LlmCollectionRequestRepository;
 import com.deknd.familyfinancemetre.flow.dashboard.service.DeviceDashboardReadService;
 import com.deknd.familyfinancemetre.flow.intake.service.IntakeSubmissionService;
 import com.deknd.familyfinancemetre.core.snapshot.service.FamilyDashboardSnapshotRecalculationService;
@@ -36,6 +37,9 @@ class FamilyFinanceMetreApplicationTests {
 
 	@MockitoBean
 	private DeviceDashboardReadService deviceDashboardReadService;
+
+	@MockitoBean
+	private LlmCollectionRequestRepository llmCollectionRequestRepository;
 
 	@Autowired
 	private MockMvc mockMvc;

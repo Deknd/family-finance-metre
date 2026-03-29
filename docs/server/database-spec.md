@@ -236,6 +236,13 @@
 Примечание:
 
 - `request_id` хранится как строка, но по контракту сервера содержит UUID-значение.
+- server-side lifecycle для MVP зафиксирован так:
+  `pending -> accepted`, `pending -> failed`, `accepted -> completed`;
+- `cancelled` остается в модели как зарезервированный статус
+  для будущей отмены или timeout-сценария, но текущая server-side реализация
+  его сама не выставляет;
+- intake callback с `request_id` разрешен только для записи,
+  которая существует и находится в статусе `accepted`.
 
 ## 6.6. `finance_submissions`
 
@@ -415,9 +422,13 @@ MVP policy расчета статуса:
 ### 8.2. Прием результата опроса
 
 1. `n8n` вызывает `POST /api/v1/intake/user-finance-data`.
-2. Сервер сохраняет payload в `finance_submissions`.
-3. Сервер пересчитывает запись в `member_finance_snapshots` по всем submission за месяц.
-4. Сервер пересчитывает агрегат семьи и обновляет `family_dashboard_snapshots`.
+2. Если передан `request_id`, сервер проверяет, что соответствующий
+   `llm_collection_request` существует и находится в статусе `accepted`.
+3. Сервер сохраняет payload в `finance_submissions`.
+4. Сервер пересчитывает запись в `member_finance_snapshots` по всем submission за месяц.
+5. Сервер пересчитывает агрегат семьи и обновляет `family_dashboard_snapshots`.
+6. Если intake был связан с `llm_collection_request`,
+   сервер переводит его в статус `completed`.
 
 ### 8.3. Ответ устройству
 

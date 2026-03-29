@@ -55,7 +55,7 @@
 
 - `core.payroll` — расчет payroll-событий;
 - `core.snapshot` — пересчет submission, snapshot и status policy;
-- `core.collection` — сущность и repository для `llm_collection_requests`.
+- `core.collection` — сущность, repository и lifecycle policy для `llm_collection_requests`.
 
 ### 3.2. `flow`
 
@@ -143,6 +143,8 @@
 - `PayrollEventCalculationService`
 - `FamilyDashboardStatusPolicy`
 - `MemberFinanceSnapshotRecalculationService`
+- lifecycle-сервис статусов `llm_collection_requests`,
+  общий для `flow.collection` и `flow.intake`
 
 ### 5.2. Что класть в `flow`
 

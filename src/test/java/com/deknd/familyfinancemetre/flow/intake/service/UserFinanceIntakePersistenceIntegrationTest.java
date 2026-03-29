@@ -348,6 +348,75 @@ class UserFinanceIntakePersistenceIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("Intake с pending request_id возвращает validation error и не сохраняет производные данные")
+	void pendingRequestIdReturnsValidationErrorAndDoesNotPersistAnything() throws Exception {
+		UUID payrollScheduleId = insertPayrollSchedule();
+		insertLlmCollectionRequest(payrollScheduleId, "req-2026-03-15-member-anna", "pending");
+
+		mockMvc.perform(post("/api/v1/intake/user-finance-data")
+				.header("X-API-Key", API_KEY)
+				.contentType(APPLICATION_JSON)
+				.content(validPayloadWithRequestId()))
+			.andExpect(status().isUnprocessableEntity())
+			.andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"))
+			.andExpect(jsonPath("$.details[0].field").value("request_id"))
+			.andExpect(jsonPath("$.details[0].message").value("llm collection request must be in accepted status"));
+
+		Integer submissionsCount = jdbcTemplate.queryForObject("select count(*) from finance_submissions", Integer.class);
+		Integer memberSnapshotCount = jdbcTemplate.queryForObject("select count(*) from member_finance_snapshots", Integer.class);
+		Integer dashboardSnapshotCount = jdbcTemplate.queryForObject("select count(*) from family_dashboard_snapshots", Integer.class);
+
+		assertThat(submissionsCount).isZero();
+		assertThat(memberSnapshotCount).isZero();
+		assertThat(dashboardSnapshotCount).isZero();
+	}
+
+	@Test
+	@DisplayName("Intake с failed request_id возвращает validation error и не сохраняет производные данные")
+	void failedRequestIdReturnsValidationErrorAndDoesNotPersistAnything() throws Exception {
+		UUID payrollScheduleId = insertPayrollSchedule();
+		insertLlmCollectionRequest(payrollScheduleId, "req-2026-03-15-member-anna", "failed");
+
+		mockMvc.perform(post("/api/v1/intake/user-finance-data")
+				.header("X-API-Key", API_KEY)
+				.contentType(APPLICATION_JSON)
+				.content(validPayloadWithRequestId()))
+			.andExpect(status().isUnprocessableEntity())
+			.andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"))
+			.andExpect(jsonPath("$.details[0].field").value("request_id"))
+			.andExpect(jsonPath("$.details[0].message").value("llm collection request must be in accepted status"));
+
+		Integer submissionsCount = jdbcTemplate.queryForObject("select count(*) from finance_submissions", Integer.class);
+		Integer memberSnapshotCount = jdbcTemplate.queryForObject("select count(*) from member_finance_snapshots", Integer.class);
+		Integer dashboardSnapshotCount = jdbcTemplate.queryForObject("select count(*) from family_dashboard_snapshots", Integer.class);
+
+		assertThat(submissionsCount).isZero();
+		assertThat(memberSnapshotCount).isZero();
+		assertThat(dashboardSnapshotCount).isZero();
+	}
+
+	@Test
+	@DisplayName("Повторный callback с тем же external_submission_id и completed request_id возвращает conflict")
+	void duplicateCallbackWithCompletedRequestStillReturnsConflict() throws Exception {
+		UUID payrollScheduleId = insertPayrollSchedule();
+		insertLlmCollectionRequest(payrollScheduleId, "req-2026-03-15-member-anna");
+
+		mockMvc.perform(post("/api/v1/intake/user-finance-data")
+				.header("X-API-Key", API_KEY)
+				.contentType(APPLICATION_JSON)
+				.content(validPayloadWithRequestId()))
+			.andExpect(status().isAccepted());
+
+		mockMvc.perform(post("/api/v1/intake/user-finance-data")
+				.header("X-API-Key", API_KEY)
+				.contentType(APPLICATION_JSON)
+				.content(validPayloadWithRequestId()))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error.code").value("DUPLICATE_SUBMISSION"))
+			.andExpect(jsonPath("$.error.message").value("Submission with this external_submission_id already exists"));
+	}
+
+	@Test
 	@DisplayName("Несколько intake за месяц суммируют доход и обновляют snapshot по самой свежей оценке")
 	void secondPayloadForSamePeriodUpdatesExistingMemberSnapshotAndAggregatesMonthlyIncome() throws Exception {
 		mockMvc.perform(post("/api/v1/intake/user-finance-data")
@@ -659,6 +728,10 @@ class UserFinanceIntakePersistenceIntegrationTest {
 	}
 
 	private UUID insertLlmCollectionRequest(UUID payrollScheduleId, String requestId) {
+		return insertLlmCollectionRequest(payrollScheduleId, requestId, "accepted");
+	}
+
+	private UUID insertLlmCollectionRequest(UUID payrollScheduleId, String requestId, String status) {
 		UUID llmCollectionRequestId = UUID.fromString("77777777-7777-7777-7777-777777777777");
 		OffsetDateTime now = OffsetDateTime.parse("2026-03-15T09:15:00+03:00");
 		jdbcTemplate.update(
@@ -692,7 +765,7 @@ class UserFinanceIntakePersistenceIntegrationTest {
 			2026,
 			3,
 			"day_after_salary",
-			"accepted",
+			status,
 			"[\"monthly_income\",\"monthly_expenses\",\"monthly_credit_payments\",\"liquid_savings\"]",
 			LocalDate.of(2026, 3, 16),
 			LocalDate.of(2026, 3, 16),
