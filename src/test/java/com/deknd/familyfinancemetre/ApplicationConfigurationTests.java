@@ -2,6 +2,8 @@ package com.deknd.familyfinancemetre;
 
 import com.deknd.familyfinancemetre.shared.config.ApplicationProperties;
 import com.deknd.familyfinancemetre.shared.config.DatabaseProperties;
+import com.deknd.familyfinancemetre.core.collection.repository.LlmCollectionRequestRepository;
+import com.deknd.familyfinancemetre.flow.collection.client.N8nClient;
 import com.deknd.familyfinancemetre.flow.dashboard.service.DeviceDashboardReadService;
 import com.deknd.familyfinancemetre.core.snapshot.service.FamilyDashboardSnapshotRecalculationService;
 import com.deknd.familyfinancemetre.flow.intake.service.IntakeSubmissionService;
@@ -39,6 +41,9 @@ class ApplicationConfigurationTests {
 	@MockitoBean
 	private DeviceDashboardReadService deviceDashboardReadService;
 
+	@MockitoBean
+	private LlmCollectionRequestRepository llmCollectionRequestRepository;
+
 	@Autowired
 	private DatabaseProperties databaseProperties;
 
@@ -50,6 +55,9 @@ class ApplicationConfigurationTests {
 
 	@Autowired
 	private Environment environment;
+
+	@Autowired
+	private N8nClient n8nClient;
 
 	@Test
 	void configurationPropertiesAreBoundFromTestProfile() {
@@ -69,6 +77,7 @@ class ApplicationConfigurationTests {
 		assertThat(applicationProperties.integrations().n8n().readTimeout()).isEqualTo(Duration.ofSeconds(10));
 		assertThat(applicationProperties.scheduler().payrollCollection().enabled()).isFalse();
 		assertThat(applicationProperties.scheduler().payrollCollection().cron()).isEqualTo("0 0 9 * * *");
+		assertThat(n8nClient).isNotNull();
 	}
 
 	@Test
