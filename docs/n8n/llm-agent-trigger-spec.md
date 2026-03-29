@@ -72,6 +72,17 @@ Endpoint запускает `Workflow A / Intake Orchestrator Agent`.
 
 Рекомендуется использовать `Authorization: Bearer`.
 
+Для MVP под `Bearer` здесь понимается не OAuth2 access token и не JWT,
+выданный внешним identity provider. Это заранее согласованный общий секрет
+между сервером и `n8n`, который обе стороны хранят в своей конфигурации.
+
+В первой версии не требуется отдельный issuer, introspection endpoint,
+валидация подписи JWT или Keycloak в цепочке. `n8n` достаточно проверять
+точное совпадение значения заголовка `Authorization`.
+
+Если позже появится требование к централизованной выдаче токенов, сроку жизни,
+ролям или federated SSO, эту схему можно заменить на полноценный OAuth2/OIDC.
+
 ## 7. Тело запроса от сервера в n8n
 
 ```json
@@ -173,7 +184,7 @@ Endpoint запускает `Workflow A / Intake Orchestrator Agent`.
 {
   "error": {
     "code": "INVALID_TOKEN",
-    "message": "Authorization token is invalid"
+    "message": "Authorization shared secret is invalid"
   }
 }
 ```
