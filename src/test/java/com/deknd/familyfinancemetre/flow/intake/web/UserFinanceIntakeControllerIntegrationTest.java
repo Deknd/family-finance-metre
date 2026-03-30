@@ -4,6 +4,7 @@ import com.deknd.familyfinancemetre.flow.intake.dto.UserFinanceIntakeAcceptedRes
 import com.deknd.familyfinancemetre.shared.web.error.ValidationErrorResponse.ValidationErrorDetail;
 import com.deknd.familyfinancemetre.flow.intake.exception.InvalidIntakePayloadReferenceException;
 import com.deknd.familyfinancemetre.core.collection.repository.LlmCollectionRequestRepository;
+import com.deknd.familyfinancemetre.flow.collection.service.PayrollCollectionOrchestrationService;
 import com.deknd.familyfinancemetre.flow.dashboard.service.DeviceDashboardReadService;
 import com.deknd.familyfinancemetre.core.snapshot.service.FamilyDashboardSnapshotRecalculationService;
 import com.deknd.familyfinancemetre.flow.intake.service.IntakeSubmissionService;
@@ -52,6 +53,9 @@ class UserFinanceIntakeControllerIntegrationTest {
 
 	@MockitoBean
 	private LlmCollectionRequestRepository llmCollectionRequestRepository;
+
+	@MockitoBean
+	private PayrollCollectionOrchestrationService payrollCollectionOrchestrationService;
 
 	@Test
 	void validPayloadReturnsAccepted() throws Exception {
