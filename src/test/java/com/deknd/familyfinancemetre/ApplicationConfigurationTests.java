@@ -4,6 +4,7 @@ import com.deknd.familyfinancemetre.shared.config.ApplicationProperties;
 import com.deknd.familyfinancemetre.shared.config.DatabaseProperties;
 import com.deknd.familyfinancemetre.core.collection.repository.LlmCollectionRequestRepository;
 import com.deknd.familyfinancemetre.flow.collection.client.N8nClient;
+import com.deknd.familyfinancemetre.flow.collection.service.PayrollCollectionOrchestrationService;
 import com.deknd.familyfinancemetre.flow.dashboard.service.DeviceDashboardReadService;
 import com.deknd.familyfinancemetre.core.snapshot.service.FamilyDashboardSnapshotRecalculationService;
 import com.deknd.familyfinancemetre.flow.intake.service.IntakeSubmissionService;
@@ -43,6 +44,9 @@ class ApplicationConfigurationTests {
 
 	@MockitoBean
 	private LlmCollectionRequestRepository llmCollectionRequestRepository;
+
+	@MockitoBean
+	private PayrollCollectionOrchestrationService payrollCollectionOrchestrationService;
 
 	@Autowired
 	private DatabaseProperties databaseProperties;
