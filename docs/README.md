@@ -6,13 +6,12 @@
 
 ### `server`
 
-Серверная архитектура, API, база данных и планы реализации:
+Серверная архитектура, API, база данных и актуальный TODO-план MVP:
 
 - [architecture.md](./server/architecture.md)
 - [api-spec.md](./server/api-spec.md)
 - [database-spec.md](./server/database-spec.md)
 - [collection-logic.md](./server/collection-logic.md)
-- [mvp-implementation-plan.md](./server/mvp-implementation-plan.md)
 - [mvp-todo-plan.md](./server/mvp-todo-plan.md)
 
 ### `n8n`
