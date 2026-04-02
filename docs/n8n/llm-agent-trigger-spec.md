@@ -132,7 +132,8 @@ Endpoint запускает `Workflow A / Intake Orchestrator Agent`.
 
 ## 8. Поля запроса
 
-- `request_id` - уникальный UUID запуска со стороны сервера, используемый как основной correlation id цепочки
+- `request_id` - UUID-строка, которую сервер генерирует для payroll-triggered запуска и использует как основной correlation id цепочки;
+- в callback обратно на сервер `n8n` должно вернуть это значение без изменений и без собственной нормализации;
 - `triggered_at` - время запуска
 - `reason` - причина запуска, например `day_after_salary`
 - `family.id` - идентификатор семьи в формате UUID
@@ -178,6 +179,13 @@ Endpoint запускает `Workflow A / Intake Orchestrator Agent`.
 
 Этот ответ должен формироваться orchestration workflow через `Respond to Webhook` и возвращаться сразу после успешной инициализации intake-сессии.
 
+С точки зрения сервера запуск считается успешным только если одновременно выполнены все условия:
+
+- `HTTP 202 Accepted`;
+- `status = accepted`;
+- `request_id` в ответе совпадает с отправленным значением;
+- `workflow_run_id` присутствует и не пустой.
+
 ### Ответ `401 Unauthorized`
 
 ```json
@@ -213,7 +221,9 @@ Endpoint запускает `Workflow A / Intake Orchestrator Agent`.
 - conversational workflow нормализует числа;
 - conversational workflow при необходимости задает ограниченное число уточнений;
 - conversational workflow отправляет итоговые данные на сервер;
-- весь процесс использует `request_id` для трассировки цепочки `server -> n8n -> Telegram -> server`.
+- весь процесс использует `request_id` для трассировки цепочки `server -> n8n -> Telegram -> server`;
+- если `n8n` возвращает другой `request_id` или не возвращает `workflow_run_id`,
+  сервер считает запуск неуспешным и переводит `llm_collection_request` в `failed`.
 
 Для MVP основной паттерн диалога фиксируется как:
 
