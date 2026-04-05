@@ -22,6 +22,7 @@
 - [telegram-finance-intake-agent-spec.md](./n8n/telegram-finance-intake-agent-spec.md)
 - [telegram-finance-intake-resilience-algorithm.md](./n8n/telegram-finance-intake-resilience-algorithm.md)
 - [telegram-finance-intake-implementation-plan.md](./n8n/telegram-finance-intake-implementation-plan.md)
+- [telegram-finance-intake-learning-roadmap.md](./n8n/telegram-finance-intake-learning-roadmap.md)
 
 ### `device`
 
